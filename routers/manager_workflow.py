@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from database import collections
 from utils.security import get_current_user
 from datetime import datetime
+from typing import List,Literal
 
 manager_router = APIRouter(prefix="/api/manager", tags=["Manager Workflow"])
 
@@ -23,12 +24,12 @@ async def get_manager_applications(current_user: dict):
     emp_id = current_user["employee_id"]
 
     if role == "TP Manager":  # TP Managers see TP employee submissions
-        tp_emp_ids = [e["Employee ID"] async for e in collections["employees"].find({"Type": "TP"}, {"Employee ID": 1})]
+        tp_emp_ids = [str(e["Employee ID"]) async for e in collections["employees"].find({"Type": "TP"}, {"Employee ID": 1})]
         query = {"employee_id": {"$in": tp_emp_ids}, "status": "Submitted"}
 
     elif role == "WFM":  # WFM sees their jobs + Non-TP employees
         job_rr_ids = [j["rr_id"] async for j in collections["jobs"].find({"wfm_id": emp_id}, {"rr_id": 1})]
-        non_tp_emp_ids = [e["Employee ID"] async for e in collections["employees"].find({"Type": "Non TP"}, {"Employee ID": 1})]
+        non_tp_emp_ids = [str(e["Employee ID"]) async for e in collections["employees"].find({"Type": "Non TP"}, {"Employee ID": 1})]
         query = {
             "job_rr_id": {"$in": job_rr_ids or ["__none__"]},  # prevent empty $in
             "employee_id": {"$in": non_tp_emp_ids},
@@ -59,7 +60,7 @@ async def shortlist(app_id: str, current_user: dict = Depends(get_current_user))
     if not app:
         raise HTTPException(404, "Application not found")
 
-    emp = await collections["employees"].find_one({"employee_id": app["employee_id"]})
+    emp = await collections["employees"].find_one({"Employee ID": int(app["employee_id"])})
 
     # TP Manager shortlists TP candidates
     if current_user["role"] == "TP Manager" and emp["Type"] == "TP" and app["status"] == "Submitted":
@@ -140,3 +141,62 @@ async def allocate(app_id: str, current_user: dict = Depends(get_current_user)):
     if result.modified_count:
         await log_audit("allocate_candidate", app_id, current_user["employee_id"], {"job_rr_id": app["job_rr_id"]})
     return {"message": "Allocated Successfully"}
+
+@manager_router.patch("/applications/bulk/{action}")
+async def bulk_manual_action(
+    # Beautiful dropdown in Swagger — outside the body!
+    action: Literal["shortlist", "interview", "select", "reject", "allocate"],
+    app_ids: List[str] = Query(Query(..., description="List of application IDs to process")),
+    current_user: dict = Depends(get_current_user)
+):
+    # Role-based action filtering
+    role = current_user["role"]
+
+    allowed_actions = {
+        "TP Manager": {"shortlist"},
+        "WFM": {"shortlist", "interview", "select", "reject"},
+        "HM": {"allocate"},
+        "Admin": {"shortlist", "interview", "select", "reject", "allocate"}  # optional
+    }
+
+    if action not in allowed_actions.get(role, set()):
+        raise HTTPException(
+            status_code=403,
+            detail=f"{role} cannot perform bulk '{action}'"
+        )
+
+    # Map to actual functions
+    handlers = {
+        "shortlist": shortlist,
+        "interview": to_interview,
+        "select": select_candidate,
+        "reject": reject_candidate,
+        "allocate": allocate,  # your existing allocate function
+    }
+    handler = handlers[action]
+
+    if not app_ids:
+        raise HTTPException(400, "app_ids cannot be empty")
+
+    results = []
+    for app_id in app_ids:
+        try:
+            resp = await handler(app_id, current_user)
+            results.append({"app_id": app_id, "status": "success", "message": resp.get("message", "Success")})
+        except HTTPException as e:
+            results.append({"app_id": app_id, "status": "failed", "error": e.detail})
+
+    await log_audit(
+        f"bulk_{action}",
+        "multiple",
+        current_user["employee_id"],
+        {"count": len(app_ids), "action": action}
+    )
+
+    return {
+        "action": action,
+        "performed_by": role,
+        "total": len(app_ids),
+        "successful": len([r for r in results if r["status"] == "success"]),
+        "results": results
+    }
