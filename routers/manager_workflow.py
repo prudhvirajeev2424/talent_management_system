@@ -145,7 +145,7 @@ async def allocate(app_id: str, current_user: dict = Depends(get_current_user)):
 @manager_router.patch("/bulk/applications/{action}")
 async def bulk_manual_action(
     action: Literal["shortlist", "interview", "select", "reject", "allocate"],
-    app_ids: List[str],
+    app_ids: List[str] = Query(..., description="List of application IDs to process"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     
