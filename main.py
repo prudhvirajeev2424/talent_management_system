@@ -33,8 +33,9 @@ db = client.talent_management
 # def root():
 #     return {"message": "Talent Management System API"}
 app.include_router(auth.router, tags=["Auth"])
-app.include_router(manager_workflow.manager_router,tags=["Manager Workflow"])
 app.include_router(jobs_router, tags=["Jobs"])
+app.include_router(manager_workflow.manager_router,tags=["Manager Workflow"])
+
 
 # Protected root endpoint
 @app.get("/")
