@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List,Union
 from models import Job, ResourceRequest
-from routers.jobs import jobs_crud
+from utils import jobs_crud
 from utils.security import get_current_user
 
 

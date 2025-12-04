@@ -2,7 +2,7 @@ from fastapi import FastAPI,Depends
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
-from routers.jobs.jobs_api import jobs_router
+from routers.jobs import jobs_router
 
 import os
 load_dotenv()
