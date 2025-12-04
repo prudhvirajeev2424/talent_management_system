@@ -19,6 +19,25 @@ db = client.talent_management
 # List of job grade bands for comparison
 BANDS = ['A1','A2','A3','B1','B2','B3','C1','C2','C3','D1','D2','D3']
 
+#Map resource_request doc to job-like response
+async def map_job(doc):
+        
+        return {
+            "rr_id": doc.get("resource_request_id"),
+            "title": doc.get("project_name"),
+            "city": doc.get("city"),
+            "state": doc.get("state"),
+            "country": doc.get("country"),
+            "required_skills": (doc.get("mandatory_skills") or []) + (doc.get("optional_skills") or []),
+            "description": doc.get("job_description") or doc.get("ust_role_description"),
+            "rr_start_date": doc.get("rr_start_date"),
+            "rr_end_date": doc.get("rr_end_date"),
+            "job_grade": doc.get("job_grade"),
+            "account_name": doc.get("account_name"),
+            "project_id": doc.get("project_id")
+        }
+
+
 # Role-based job access:
 #     - Admin: all jobs
 #     - Employee (TP): jobs in band ±1, matching skills, optional location
@@ -32,21 +51,21 @@ async def get_jobs(location: Optional[str], current_user):
 
     # Admin has access to all jobs
     if role == "Admin":
-        cursor = db.jobs.find({}) 
+        cursor = db.resource_request.find({}) 
         # Fetch the jobs as a list
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return docs
+        return [await map_job(d) for d in docs]
 
      # Employee role-based access
     elif role in ["TP", "Non TP"]: 
        
-        emp = await db.employees.find_one({"Employee ID": int(current_user["employee_id"])})
+        emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         #Role - TP
         if emp and role == "TP":
-            curr_band = emp["Band"]
-            curr_skills = emp.get("Detailed Skill Set (List of top skills on profile)", [])
+            curr_band = emp["band"]
+            curr_skills = emp.get("detailed_skills)", [])
 
              # Find the index of the current band
             indx = BANDS.index(curr_band)
@@ -55,35 +74,59 @@ async def get_jobs(location: Optional[str], current_user):
  
             query = {
                 "job_grade": {"$in": [curr_band, above_band, below_band]},  # Filter jobs based on bands ±1
-                "required_skills": {"$in": curr_skills},  # Filter jobs based on required skills
-                "status":True
+                "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
+                "flag":True
             }
              # Optional filter by location (city)
             if location:
                 query["city"] = location
 
             # Execute the query to find jobs
-            cursor = db.jobs.find(query)
+            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
-            return docs
+            
+            return [await map_job(d) for d in docs]
+        
         else:
             #Role - Non TP
             query = {}
             if location:
                 query["city"] = location
-            query["status"]=True
-            cursor = db.jobs.find(query)
+            query["flag"]=True
+            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
            
-            return docs
+            return [await map_job(d) for d in docs]
 
      # WFM role can access jobs based on WFM ID
     elif role == "WFM":
-        query = {"WFM ID": current_user["employee_id"]}
+        query = {"wfm_id": {"$ne":current_user["employee_id"]}}
+        cursor = db.resource_request.find(query)
+        docs = await cursor.to_list(length=100)
+        for d in docs:
+            d["_id"] = str(d["_id"])
+        return [await map_job(d) for d in docs]
+
+     # HM role can access jobs based on HM ID
+    elif role == "HM":
+        query = {"hm_id": {"$ne":current_user["employee_id"]}}
+        cursor = db.resource_request.find(query)
+        docs = await cursor.to_list(length=100)
+        for d in docs:
+            d["_id"] = str(d["_id"])
+        return [await map_job(d) for d in docs]
+
+async def jobs_under_manager(current_user):
+    
+    role = current_user["role"]
+    
+    # WFM role can access jobs based on WFM ID
+    if role == "WFM":
+        query = {"wfm_id": current_user["employee_id"]}
         cursor = db.resource_request.find(query)
         docs = await cursor.to_list(length=100)
         for d in docs:
@@ -92,13 +135,14 @@ async def get_jobs(location: Optional[str], current_user):
 
      # HM role can access jobs based on HM ID
     elif role == "HM":
-        query = {"HM ID": current_user["employee_id"]}
+        query = {"hm_id": current_user["employee_id"]}
         cursor = db.resource_request.find(query)
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
         return docs
-
+    
+    
 # Function to create a job and associated resource request, and write to a CSV file
 async def create_job_and_resource_request(job_data: ResourceRequest, current_user):
     row = job_data.dict(by_alias=True) # Convert the ResourceRequest data to a dictionary using aliases
@@ -140,96 +184,27 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
             try:
                 # Step 1: Find the resource request owned by this HM
                 resource_request = await db.resource_request.find_one(
-                    {"Resource Request ID": request_id, "HM ID": current_user["employee_id"]},
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     session=session  # Pass the session for atomicity
                 )
                 if not resource_request:
                     raise PermissionError("ResourceRequest not found or you're not authorized to update this job.")
 
                 # Step 2: Update ResourceRequest
-                update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=True)
+                update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
                 update_resource_request_data = normalize_dates(update_resource_request_data)
 
                 update_result = await db.resource_request.update_one(
-                    {"Resource Request ID": request_id, "HM ID": current_user["employee_id"]},
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"$set": update_resource_request_data},
                     session=session
                 )
                 if update_result.matched_count == 0:
                     raise Exception("ResourceRequest not found for the job.")
 
-                # Step 3: Update Job (linked by rr_id)
-                update_job_data = {
-                    "rr_id": update_data.resource_request_id,
-                    "title": update_data.project_name,
-                    "city": update_data.city,
-                    "state": update_data.state,
-                    "country": update_data.country,
-                    "required_skills": (update_data.mandatory_skills or []) + (update_data.optional_skills or []),
-                    "description": update_data.job_description or update_data.ust_role_description,
-                    "rr_start_date": update_data.rr_start_date,
-                    "rr_end_date": update_data.rr_end_date,
-                    "wfm_id": update_data.wfm_id,
-                    "hm_id": update_data.hm_id,
-                    "status": update_data.flag,
-                    "job_grade": update_data.job_grade,
-                    "account_name": update_data.account_name,
-                    "project_id": update_data.project_id,
-                }
-                update_job_data = normalize_dates(update_job_data)
-
-                await db.jobs.update_one(
-                    {"rr_id": request_id, "hm_id": current_user["employee_id"]},
-                    {"$set": update_job_data},
-                    session=session
-                )
-
+              
                 return True
 
             except Exception as e:
                 raise Exception(f"Error occurred: {e}")
             
-# async def create_job_and_resource_request(job_data: ResourceRequest, current_user):
-   
-#     if current_user.role != "HM":
-#         raise PermissionError("You do not have permission to create jobs.")
-   
-#     # Start a MongoDB session for the transaction
-#     async with db.client.start_session() as session:
-#         try:
-#             # Step 1: Insert ResourceRequest
-#             resource_request_data = job_data.__dict__()  # Convert the ResourceRequest to a dict
-#             # Insert the resource request into the ResourceRequest table
-#             result = await db.resource_request.insert_one(resource_request_data, session=session)
- 
-#             # Step 2: Create Job data based on ResourceRequest
-#             job_data_for_job_table = {
-#                 "rr_id": str(result.inserted_id),  # Link the Job to ResourceRequest via rr_id
-#                 "title": job_data.project_name,
-#                 "location": job_data.city,
-#                 "required_skills": job_data.mandatory_skills + job_data.optional_skills,
-#                 "description": job_data.job_description,
-#                 "start_date": job_data.project_start_date,
-#                 "end_date": job_data.project_end_date,
-#                 "wfm_id": job_data.wfm_id,
-#                 "hm_id": job_data.hm_id,
-#                 "status": "Open",
-#                 "account_name": job_data.account_name,
-#                 "project_id": job_data.project_id,
-#                 "created_at": job_data.raised_on,
-#             }
- 
-#             # Step 3: Insert the Job data into the Job table
-#             new_job = Job(**job_data_for_job_table)
-#             await db.jobs.insert_one(new_job.__dict__(), session=session)
- 
-#             # Commit the transaction
-#             session.commit_transaction()
- 
-#             return str(result.inserted_id)  # Return ResourceRequest ID as confirmation
- 
-#         except Exception as e:
-#             # Abort the transaction if there is any error
-#             session.abort_transaction()
-#             raise Exception(f"Error occurred: {e}")
- 
