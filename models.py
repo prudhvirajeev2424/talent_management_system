@@ -97,29 +97,7 @@ class Employee(BaseModel):
         extra = "ignore"
  
 
-class Job(BaseModel):
-    rr_id: str
-    title: str
-    city: str
-    state: Optional[str] = None
-    country: str
-    required_skills: List[str]
-    description: Optional[str]
-    rr_start_date: date
-    rr_end_date: date
-    wfm_id: str
-    hm_id: str
-    status: bool = True
-    job_grade: str
-    account_name: str
-    project_id: str
-    created_at: datetime = datetime.now(timezone.utc)
-   
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
- 
+
 # model.py → FINAL VERSION – ZERO ERRORS ON REAL FILE
 
 class ResourceRequest(BaseModel):
@@ -229,7 +207,7 @@ class ResourceRequest(BaseModel):
 "resources_in_reject","rr_ageing",mode="before")
     @classmethod
     def csv_str_to_int(cls,v):
-        if str(v).strip() == "":
+        if str(v).strip() == "" or v==None:
             return
          
         v = float(str(v).strip())

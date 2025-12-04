@@ -5,7 +5,6 @@ db = client.talent_management
 
 collections = {
     "employees": db.employees,
-    "jobs": db.jobs,
     "applications": db.applications,
     "users": db.users,
     "refresh_tokens": db.refresh_tokens,

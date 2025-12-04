@@ -1,7 +1,7 @@
 from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
-from models import Job,ResourceRequest
+from models import ResourceRequest
 from pymongo import ReturnDocument
 import csv
 import os
