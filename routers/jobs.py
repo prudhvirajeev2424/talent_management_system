@@ -50,3 +50,20 @@ async def update_job(request_id: str, updated_job: ResourceRequest, current_user
     except Exception as e:
         # Handle errors during update
         raise HTTPException(status_code=400, detail=f"Error: {e}")
+
+
+# Endpoint to get skills availability for HM
+# Only HM (Hiring Manager) is authorized
+# Returns all required skills from their resource requests and the count of employees skilled in each
+@jobs_router.get("/skills/availability")
+async def get_skills_availability(current_user=Depends(get_current_user)):
+    # Check if user is HM
+    if current_user["role"] != "HM":
+        raise HTTPException(status_code=403, detail="Not Authorized")
+    try:
+        # Call CRUD function to get skills availability
+        skills_data = await jobs_crud.get_skills_availability(current_user)
+        return skills_data
+    except Exception as e:
+        # Handle errors
+        raise HTTPException(status_code=400, detail=f"Error: {e}")

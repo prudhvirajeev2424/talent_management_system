@@ -214,3 +214,106 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
             except Exception as e:
                 raise Exception(f"Error occurred: {e}")
             
+# Function to get skills availability for HM
+# Fetches all resource requests for the HM, extracts all required skills,
+# and returns count of employees skilled in each skill
+def clean_skill(skill: str) -> str:
+    """
+    Normalize skill strings by removing brackets, quotes, and extra spaces.
+    """
+    if not isinstance(skill, str):
+        return str(skill).strip()
+    skill = skill.strip()
+    skill = skill.replace("[", "").replace("]", "")
+    skill = skill.replace("'", "").replace('"', "")
+    return skill.strip()
+ 
+ 
+async def get_skills_availability(current_user):
+
+    try:
+        hm_id = current_user["employee_id"]
+ 
+        # Step 1: Fetch all resource requests for this HM
+        resource_requests = await db.resource_request.find({"hm_id": hm_id}).to_list(None)
+ 
+        # Step 2: Extract all unique skills
+        all_skills = set()
+        rr_skills_mapping = []
+ 
+        for rr in resource_requests:
+            rr_id = rr.get("resource_request_id", "")
+            mandatory_skills = rr.get("mandatory_skills", [])
+            optional_skills = rr.get("optional_skills", [])
+ 
+            # Handle both list and string types
+            if isinstance(mandatory_skills, str):
+                mandatory_skills = [s.strip() for s in mandatory_skills.split(",") if s.strip()]
+            if isinstance(optional_skills, str):
+                optional_skills = [s.strip() for s in optional_skills.split(",") if s.strip()]
+ 
+            # Normalize skills
+            mandatory_skills = [clean_skill(s) for s in mandatory_skills]
+            optional_skills = [clean_skill(s) for s in optional_skills]
+ 
+            # Combine and deduplicate
+            combined_skills = list(set(mandatory_skills + optional_skills))
+ 
+            # Add to global set
+            all_skills.update(combined_skills)
+ 
+            # Store mapping
+            rr_skills_mapping.append({
+                "resource_request_id": rr_id,
+                "project_name": rr.get("project_name", ""),
+                "ust_role": rr.get("ust_role", ""),
+                "mandatory_skills": mandatory_skills,
+                "optional_skills": optional_skills,
+                "combined_skills": combined_skills,
+                "total_skills_required": len(combined_skills)
+            })
+ 
+        # Step 3: For each skill, find employees
+        skills_summary = []
+        for skill in sorted(all_skills):
+            if not skill:
+                continue
+ 
+            employees_with_skill = await db.employees.find({
+                "detailed_skills": {"$in": [skill]}
+            }).to_list(None)
+ 
+            skills_summary.append({
+                "skill": skill,
+                "employee_count": len(employees_with_skill),
+                "employees": [
+                    {
+                        "employee_id": emp.get("employee_id"),
+                        "employee_name": emp.get("employee_name"),
+                        "designation": emp.get("designation"),
+                        "primary_technology": emp.get("primary_technology"),
+                        "city": emp.get("city")
+                    }
+                    for emp in employees_with_skill
+                ]
+            })
+ 
+        # Step 4: Return summary
+        return {
+            "hm_id": hm_id,
+            "resource_requests_count": len(resource_requests),
+            "total_unique_skills": len(all_skills),
+            "resource_requests": rr_skills_mapping,
+            "skills_summary": sorted(skills_summary, key=lambda x: x["employee_count"], reverse=True),
+            "summary_stats": {
+                "total_resource_requests": len(resource_requests),
+                "total_unique_skills_required": len(all_skills),
+                "average_employees_per_skill": round(
+                    sum(s["employee_count"] for s in skills_summary) / len(skills_summary), 2
+                ) if skills_summary else 0,
+                "skills_with_no_employees": len([s for s in skills_summary if s["employee_count"] == 0])
+            }
+        }
+ 
+    except Exception as e:
+        raise Exception(f"Error retrieving skills availability: {str(e)}")
