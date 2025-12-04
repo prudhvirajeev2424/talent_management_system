@@ -2,7 +2,7 @@
 import os
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List 
  
 import pandas as pd
 import chardet

@@ -10,3 +10,5 @@ openpyxl
 PyPDF2
 python-docx
 argon2-cffi
+chardet
+apscheduler
