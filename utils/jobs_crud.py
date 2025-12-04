@@ -19,35 +19,54 @@ db = client.talent_management
 # List of job grade bands for comparison
 BANDS = ['A1','A2','A3','B1','B2','B3','C1','C2','C3','D1','D2','D3']
 
+#Map resource_request doc to job-like response
+async def map_job(doc):
+       
+        return {
+            "rr_id": doc.get("resource_request_id"),
+            "title": doc.get("project_name"),
+            "city": doc.get("city"),
+            "state": doc.get("state"),
+            "country": doc.get("country"),
+            "required_skills": (doc.get("mandatory_skills") or []) + (doc.get("optional_skills") or []),
+            "description": doc.get("job_description") or doc.get("ust_role_description"),
+            "rr_start_date": doc.get("rr_start_date"),
+            "rr_end_date": doc.get("rr_end_date"),
+            "job_grade": doc.get("job_grade"),
+            "account_name": doc.get("account_name"),
+            "project_id": doc.get("project_id")
+        }
+ 
+ 
 # Role-based job access:
 #     - Admin: all jobs
 #     - Employee (TP): jobs in band ±1, matching skills, optional location
 #     - Employee (non-TP): all jobs
 #     - WFM: jobs where wfm_id == current_user.id
 #     - HM: jobs where hm_id == current_user.id
-
+ 
 async def get_jobs(location: Optional[str], current_user):
-    
+   
     role = current_user["role"] # Get the role of the current user (Admin, Employee, WFM, HM)
-
+ 
     # Admin has access to all jobs
     if role == "Admin":
-        cursor = db.jobs.find({}) 
+        cursor = db.resource_request.find({})
         # Fetch the jobs as a list
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return docs
-
+        return [await map_job(d) for d in docs]
+ 
      # Employee role-based access
-    elif role in ["TP", "Non TP"]: 
+    elif role in ["TP", "Non TP"]:
        
-        emp = await db.employees.find_one({"Employee ID": int(current_user["employee_id"])})
+        emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         #Role - TP
         if emp and role == "TP":
-            curr_band = emp["Band"]
-            curr_skills = emp.get("Detailed Skill Set (List of top skills on profile)", [])
-
+            curr_band = emp["band"]
+            curr_skills = emp.get("detailed_skills)", [])
+ 
              # Find the index of the current band
             indx = BANDS.index(curr_band)
             above_band = BANDS[indx+1] if indx < len(BANDS)-1 else BANDS[indx]
@@ -55,31 +74,35 @@ async def get_jobs(location: Optional[str], current_user):
  
             query = {
                 "job_grade": {"$in": [curr_band, above_band, below_band]},  # Filter jobs based on bands ±1
-                "required_skills": {"$in": curr_skills},  # Filter jobs based on required skills
-                "status":True
+                "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
+                "flag":True
             }
              # Optional filter by location (city)
             if location:
                 query["city"] = location
-
+ 
             # Execute the query to find jobs
-            cursor = db.jobs.find(query)
+            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
-            return docs
+           
+            return [await map_job(d) for d in docs]
+       
         else:
             #Role - Non TP
             query = {}
             if location:
                 query["city"] = location
-            query["status"]=True
-            cursor = db.jobs.find(query)
+            query["flag"]=True
+            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
            
-            return docs
+            return [await map_job(d) for d in docs]
+ 
+ 
 
      # WFM role can access jobs based on WFM ID
     elif role == "WFM":
