@@ -32,22 +32,6 @@ def create_refresh_token(data: dict) -> str:
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# === URL TOKEN (optional short-lived auth via query string) ===
-def create_url_token(data: dict, expires_minutes: int = 5) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire, "type": "url"})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def verify_url_token(token: str) -> dict:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "url":
-            raise HTTPException(status_code=401, detail="Invalid URL token")
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired URL token")
-
 # === AUTH DEPENDENCY ===
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     token = credentials.credentials
