@@ -44,11 +44,11 @@ async def map_job(doc):
 #     - Employee (non-TP): all jobs
 #     - WFM: jobs where wfm_id == current_user.id
 #     - HM: jobs where hm_id == current_user.id
-
+ 
 async def get_jobs(location: Optional[str], current_user):
-    
+   
     role = current_user["role"] # Get the role of the current user (Admin, Employee, WFM, HM)
-
+ 
     # Admin has access to all jobs
     if role == "Admin":
         cursor = db.resource_request.find({}) 
@@ -59,8 +59,9 @@ async def get_jobs(location: Optional[str], current_user):
         return [await map_job(d) for d in docs]
 
      # Employee role-based access
-    elif role in ["TP", "Non TP"]: 
+    elif role in ["TP", "Non TP"]:
        
+        emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         #Role - TP
         if emp and role == "TP":
@@ -76,12 +77,15 @@ async def get_jobs(location: Optional[str], current_user):
                 "job_grade": {"$in": [curr_band, above_band, below_band]},  # Filter jobs based on bands ±1
                 "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
                 "flag":True
+                "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
+                "flag":True
             }
              # Optional filter by location (city)
             if location:
                 query["city"] = location
-
+ 
             # Execute the query to find jobs
+            cursor = db.resource_request.find(query)
             cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
@@ -96,13 +100,15 @@ async def get_jobs(location: Optional[str], current_user):
                 query["city"] = location
             query["flag"]=True
             cursor = db.resource_request.find(query)
+            query["flag"]=True
+            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
            
             return [await map_job(d) for d in docs]
 
-     # WFM role can access jobs based on WFM ID
+    # WFM role can access jobs based on WFM ID
     elif role == "WFM":
         query = {"wfm_id": {"$ne":current_user["employee_id"]}}
         cursor = db.resource_request.find(query)
@@ -131,8 +137,8 @@ async def jobs_under_manager(current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return docs
-
+        return [await map_job(d) for d in docs]
+ 
      # HM role can access jobs based on HM ID
     elif role == "HM":
         query = {"hm_id": current_user["employee_id"]}
@@ -171,13 +177,12 @@ def normalize_dates(doc: dict) -> dict:
 
     # Update both ResourceRequest and Job documents.
     # - Only HMs can update.
-    # - HM can only update jobs they own (hm_id == current_user["employee_id"]).
-
+    # - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
 async def update_job_and_resource_request(request_id: str, update_data: ResourceRequest, current_user):
-    
+   
     if current_user["role"] != "HM":
         raise PermissionError("You do not have permission to update jobs.")
-
+ 
     # Start a session for updates
     async with await db.client.start_session() as session:
         async with session.start_transaction():
@@ -185,16 +190,19 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                 # Step 1: Find the resource request owned by this HM
                 resource_request = await db.resource_request.find_one(
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     session=session  # Pass the session for atomicity
                 )
                 if not resource_request:
                     raise PermissionError("ResourceRequest not found or you're not authorized to update this job.")
-
+ 
                 # Step 2: Update ResourceRequest
                 update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
+                update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
                 update_resource_request_data = normalize_dates(update_resource_request_data)
-
+ 
                 update_result = await db.resource_request.update_one(
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"$set": update_resource_request_data},
                     session=session
@@ -204,7 +212,7 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
 
               
                 return True
-
+ 
             except Exception as e:
                 raise Exception(f"Error occurred: {e}")
             
