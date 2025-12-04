@@ -35,7 +35,7 @@ async def login(username: str, password: str):
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": 60
+        "expires_in": "300 seconds"
     }
 
 @router.post("/refresh")
@@ -80,7 +80,7 @@ async def refresh_token(refresh_token: str):
     return {
         "access_token": new_access_token,
         "token_type": "bearer",
-        "expires_in": 60
+        "expires_in": "300 seconds"
     }
 
 @router.post("/logout")
