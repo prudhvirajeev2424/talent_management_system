@@ -19,6 +19,13 @@ class UserRole(str, Enum):
     EMPLOYEE_TP = "TP"
     EMPLOYEE_NON_TP = "Non TP"
  
+class User(BaseModel):
+    employee_id : str
+    password : str = "$argon2id$v=19$m=65536,t=3,p=4$otQ6h9CaM4ZwzlnL2TtnTA$gbLxVjVlKj/NYp7KF7B287JDOVMMHO3oDGUbjszW32U"
+    role : str
+    is_active : bool = True
+    created_at : datetime = datetime.now(timezone.utc)
+    
 class ApplicationStatus(str, Enum):
     DRAFT = "Draft"
     SUBMITTED = "Submitted"
@@ -34,77 +41,62 @@ class Employee(BaseModel):
     employee_name: str = Field(..., alias="Employee Name")
     employment_type: str = Field(..., alias="Employment Type")
     designation: str = Field(..., alias="Designation")
-    band: str = Field(..., alias="Band")
+    band: Optional[str] = Field( alias="Band")
     city: str = Field(..., alias="City")
     location_description: str = Field(..., alias="Location Description")
     primary_technology: str = Field(..., alias="Primary Technology")
     secondary_technology: Optional[str] = Field(None, alias="Secondary Technology")
-    detailed_skills: List[str] = Field(default_factory=list, alias="Detailed Skill Set (List of top skills on profile)")
+    detailed_skills: List[str] = Field(default_factory=list,
+                                       alias="Detailed Skill Set (List of top skills on profile)")
     type: Literal["TP", "Non TP"] = Field(..., alias="Type")
+    resume : Optional[str] = None
     resume_text: Optional[str] = Field(None)
-   
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
  
-    # -------------------------------------------------
-    # 1. Normalize Type (TP / Non TP) – case insensitive
-    # -------------------------------------------------
+    # Normalize TP / Non TP
     @field_validator("type", mode="before")
     @classmethod
     def normalize_type(cls, v):
         if not v:
             return "Non TP"
-        val = str(v).strip().upper()
-        return "TP" if val == "TP" else "Non TP"
+        return "TP" if str(v).strip().upper() == "TP" else "Non TP"
  
-    # -------------------------------------------------
-    # 2. Accept ALL real bands seen in your data:
-    #     A0–A9, B1–B9, C1–C9, D1–D9
-    #     T1–T9, E1–E9, P1–P9
-    # -------------------------------------------------
+    # Validate and normalize band values
     @field_validator("band", mode="before")
     @classmethod
     def normalize_band(cls, v):
         if not v or str(v).strip() == "":
-            return "A0"
+            return None
  
         value = str(v).strip().upper()
  
-        # All valid patterns
         if re.match(r"^[A-D][0-9]$", value):    # A0–D9
             return value
-        if re.match(r"^[TEP][1-9]$", value):    # T1–T9, E1–E9, P1–P9
+        if re.match(r"^[TEP][1-9]$", value):    # T/E/P grades
             return value
  
-        raise ValueError(f"Invalid band format: '{v}' → '{value}'")
+        raise ValueError(f"Invalid band format: '{value}'")
  
-    # -------------------------------------------------
-    # 3. Handle "Not Available" gracefully
-    # -------------------------------------------------
+    # Handle NA/Not Available
     @field_validator("primary_technology", "secondary_technology", mode="before")
     @classmethod
     def handle_not_available(cls, v, info):
-        if not v or str(v or "").strip().upper() in ("NOT AVAILABLE", "NA", "NULL", ""):
+        if not v or str(v).strip().upper() in ("NOT AVAILABLE", "NA", "NULL", ""):
             return "" if info.field_name == "primary_technology" else None
         return str(v).strip()
  
-    # -------------------------------------------------
-    # 4. Split skills (handles commas, question marks, etc.)
-    # -------------------------------------------------
+    # Split comma-separated or question-mark-separated skills
     @field_validator("detailed_skills", mode="before")
     @classmethod
     def split_detailed_skills(cls, v):
         if not v or str(v).strip().upper() in ("NA", "NOT AVAILABLE", "NULL", ""):
             return []
-        skills = [s.strip() for s in re.split(r'[,?]', str(v)) if s.strip()]
-        return skills
+        return [s.strip() for s in re.split(r'[,?]', str(v)) if s.strip()]
  
     class Config:
-        populate_by_name = True
+        populate_by_name = False
         extra = "ignore"
  
+
 class Job(BaseModel):
     rr_id: str
     title: str
@@ -192,8 +184,8 @@ class ResourceRequest(BaseModel):
     last_activity_date: AwareDatetime = Field(..., alias="Last Activity Date")
     last_activity: Optional[str] = Field(None, alias="Last Activity")
     contract_category: Optional[str] = Field(None, alias="Contract Category")
-    mandatory_skills: List[str] = Field(..., alias="Mandatory Skills")
-    optional_skills: Optional[List[str]] = Field(None, alias="Optional Skills")
+    mandatory_skills: str = Field(..., alias="Mandatory Skills")
+    optional_skills: Optional[str] = Field(None, alias="Optional Skills")
     rr_skill_group: Optional[str] = Field(None, alias="RR Skill Group")
     flag: bool = True  
     matching_resources_count: Optional[int] = Field(None, alias="Matching Resources Count (Score 50% and above)")
@@ -225,12 +217,7 @@ class ResourceRequest(BaseModel):
     cancel_requested: Optional[str] = Field(None, alias="Cancel Requested")
     legal_entity: str = Field(..., alias="Legal Entity")
     company_name: str = Field(..., alias="Company Name")
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-    
+ 
     # Your existing validators remain 100% unchanged
     @field_validator("priority", mode="after")
     @classmethod
@@ -305,6 +292,10 @@ class ResourceRequest(BaseModel):
             pass
  
         raise ValueError(f"Invalid datetime '{v}'")
+ 
+    class Config:
+        populate_by_name = True
+        extra = "ignore"
  
 
 
