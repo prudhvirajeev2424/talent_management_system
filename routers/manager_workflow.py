@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import collections
 from utils.security import get_current_user
 from datetime import datetime
-from typing import List,Literal,Dict,Any
+from typing import List,Literal,Dict,Any,Optional
 
 manager_router = APIRouter(prefix="/api/manager", tags=["Manager Workflow"])
 
@@ -227,4 +227,84 @@ async def bulk_manual_action(
         "successful": successful_count,
         "failed": failed_count,
         "results": results
+    }
+    
+@manager_router.get("/skill-matches/applications/{job_rr_id}")
+async def get_skill_matches(
+    job_rr_id: str,
+    min_match: Optional[float] = Query(
+        None,
+        ge=0.0,
+        le=100.0,
+        description="Only return candidates with skill match ≥ this percentage",
+        example=70.0
+    ),
+    current_user: dict = Depends(get_current_user)
+):
+
+    # Fetch job
+    job = await collections["jobs"].find_one({"rr_id": job_rr_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job RR not found")
+
+    required_skills = job.get("required_skills", [])
+    if not required_skills:
+        return {"message": "No required skills defined for this job"}
+
+    # Normalize required skills once
+    req_skills = {skill.strip().lower() for skill in required_skills}
+
+    # Fetch all submitted applications
+    applications = await collections["applications"].find({
+        "job_rr_id": job_rr_id,
+        "status": "Submitted"
+    }).to_list(1000)
+
+    results = []
+
+    for app in applications:
+        employee_id = app["employee_id"]
+
+        # Fetch employee profile
+        employee = await collections["employees"].find_one({"Employee ID": int(employee_id)})
+        if not employee:
+            continue
+
+        emp_skills = {
+            skill.strip().lower()
+            for skill in employee.get("Detailed Skill Set (List of top skills on profile)", [])
+        }
+
+        # Calculate match percentage
+        matched_count = len(emp_skills.intersection(req_skills))
+        match_percentage = (matched_count / len(req_skills)) * 100 if req_skills else 0
+
+        # Apply filter if min_match is provided
+        if min_match is not None and match_percentage < min_match:
+            continue
+
+        results.append({
+            "application_id": str(app["_id"]),
+            "employee_id": employee_id,
+            "employee_name": employee.get("Employee Name", "Unknown"),
+            "current_designation": employee.get("Designation"),
+            "location": employee.get("City"),
+            "match_percentage": round(match_percentage, 2),
+            "matched_skills": list(emp_skills.intersection(req_skills)),
+            "missing_skills": list(req_skills - emp_skills),
+            "total_required_skills": len(req_skills),
+            "skills_matched_count": matched_count
+        })
+
+    # Sort by highest match first
+    results.sort(key=lambda x: x["match_percentage"], reverse=True)
+
+    return {
+        "job_rr_id": job_rr_id,
+        "job_title": job.get("title"),
+        "total_applications": len(applications),
+        "candidates_returned": len(results),
+        "required_skills": list(req_skills),
+        "min_match_filter_applied": min_match,
+        "candidates": results
     }
