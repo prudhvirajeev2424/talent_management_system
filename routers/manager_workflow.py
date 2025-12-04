@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import collections
 from utils.security import get_current_user
 from datetime import datetime
-from typing import List,Literal
+from typing import List,Literal,Dict,Any
 
 manager_router = APIRouter(prefix="/api/manager", tags=["Manager Workflow"])
 
@@ -142,61 +142,89 @@ async def allocate(app_id: str, current_user: dict = Depends(get_current_user)):
         await log_audit("allocate_candidate", app_id, current_user["employee_id"], {"job_rr_id": app["job_rr_id"]})
     return {"message": "Allocated Successfully"}
 
-@manager_router.patch("/applications/bulk/{action}")
+@manager_router.patch("/bulk/applications/{action}")
 async def bulk_manual_action(
-    # Beautiful dropdown in Swagger — outside the body!
     action: Literal["shortlist", "interview", "select", "reject", "allocate"],
-    app_ids: List[str] = Query(Query(..., description="List of application IDs to process")),
-    current_user: dict = Depends(get_current_user)
-):
-    # Role-based action filtering
-    role = current_user["role"]
-
+    app_ids: List[str],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    
+    if not app_ids:
+        raise HTTPException(status_code=400, detail="app_ids cannot be empty")
+    
+    role = current_user.get("role")
+    if not role:
+        raise HTTPException(status_code=401, detail="User role not found")
+    
     allowed_actions = {
         "TP Manager": {"shortlist"},
         "WFM": {"shortlist", "interview", "select", "reject"},
         "HM": {"allocate"},
-        "Admin": {"shortlist", "interview", "select", "reject", "allocate"}  # optional
+        "Admin": {"shortlist", "interview", "select", "reject", "allocate"}
     }
 
     if action not in allowed_actions.get(role, set()):
         raise HTTPException(
             status_code=403,
-            detail=f"{role} cannot perform bulk '{action}'"
+            detail=f"{role} is not authorized to perform bulk '{action}' action"
         )
-
-    # Map to actual functions
-    handlers = {
-        "shortlist": shortlist,
-        "interview": to_interview,
-        "select": select_candidate,
-        "reject": reject_candidate,
-        "allocate": allocate,  # your existing allocate function
-    }
-    handler = handlers[action]
-
-    if not app_ids:
-        raise HTTPException(400, "app_ids cannot be empty")
 
     results = []
     for app_id in app_ids:
         try:
-            resp = await handler(app_id, current_user)
-            results.append({"app_id": app_id, "status": "success", "message": resp.get("message", "Success")})
+            # Call the appropriate action based on the action type
+            if action == "shortlist":
+                resp = await shortlist(app_id, current_user)
+            elif action == "interview":
+                resp = await to_interview(app_id, current_user)
+            elif action == "select":
+                resp = await select_candidate(app_id, current_user)
+            elif action == "reject":
+                resp = await reject_candidate(app_id, current_user)
+            elif action == "allocate":
+                resp = await allocate(app_id, current_user)
+            
+            results.append({
+                "app_id": app_id,
+                "status": "success",
+                "message": resp.get("message", "Operation completed successfully")
+            })
         except HTTPException as e:
-            results.append({"app_id": app_id, "status": "failed", "error": e.detail})
+            results.append({
+                "app_id": app_id,
+                "status": "failed",
+                "error": e.detail,
+                "status_code": e.status_code
+            })
+        except Exception as e:
+            results.append({
+                "app_id": app_id,
+                "status": "failed",
+                "error": f"Unexpected error: {str(e)}"
+            })
+
+    successful_count = len([r for r in results if r["status"] == "success"])
+    failed_count = len(app_ids) - successful_count
 
     await log_audit(
         f"bulk_{action}",
         "multiple",
         current_user["employee_id"],
-        {"count": len(app_ids), "action": action}
+        {
+            "action": action,
+            "role": role,
+            "total_count": len(app_ids),
+            "successful_count": successful_count,
+            "failed_count": failed_count,
+            "app_ids": app_ids
+        }
     )
 
     return {
         "action": action,
         "performed_by": role,
         "total": len(app_ids),
-        "successful": len([r for r in results if r["status"] == "success"]),
+        "successful": successful_count,
+        "failed": failed_count,
         "results": results
     }
