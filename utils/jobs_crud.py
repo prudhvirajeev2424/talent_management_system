@@ -76,9 +76,7 @@ async def get_jobs(location: Optional[str], current_user):
             query = {
                 "job_grade": {"$in": [curr_band, above_band, below_band]},  # Filter jobs based on bands ±1
                 "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
-                "flag":True
-                "mandatory_skills": {"$in": curr_skills},  # Filter jobs based on required skills
-                "flag":True
+                "flag":True,
             }
              # Optional filter by location (city)
             if location:
