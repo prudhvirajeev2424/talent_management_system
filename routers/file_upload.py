@@ -2,7 +2,7 @@
 import os
 import logging
 from datetime import datetime, timezone
-from typing import List 
+from typing import List
  
 import pandas as pd
 import chardet
@@ -161,7 +161,7 @@ async def upload_rr_report(file: UploadFile = File(...)):
 # -------------------------------------------------------------------
 # Auto-processing (watch folder)
 # -------------------------------------------------------------------
-UPLOAD_FOLDER = "..utils/rr_data"
+UPLOAD_FOLDER = "updated"
 PROCESSED_FOLDER = "processed"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
@@ -179,14 +179,20 @@ async def auto_rr_job():
     try:
         with open(src, "rb") as f:
             fake_file = UploadFile(filename=latest, file=BytesIO(f.read()))
+        print(fake_file,"hello")
         await upload_rr_report(fake_file)
         os.rename(src, dst)
         logger.info(f"Auto-processed RR: {latest} → processed/")
     except Exception as e:
         logger.error(f"Auto RR job failed for {latest}: {e}")
  
-# scheduler = AsyncIOScheduler()
-# scheduler.add_job(auto_rr_job, "cron", minute="*", id="rr_watcher")
-# scheduler.start()
-# print("Scheduler started")
+scheduler = AsyncIOScheduler()
+scheduler.add_job(auto_rr_job, "cron", minute="*", id="rr_watcher")
+scheduler.start()
+ 
+ 
+scheduler = AsyncIOScheduler()
+scheduler.add_job(auto_rr_job, "cron", minute="*", id="rr_watcher")
+scheduler.start()
+print("Scheduler started")
  
