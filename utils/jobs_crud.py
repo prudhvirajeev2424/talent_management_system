@@ -124,12 +124,13 @@ def normalize_dates(doc: dict) -> dict:
     return doc
 
 # Function to update both the ResourceRequest and Job documents in MongoDB
+
+    # Update both ResourceRequest and Job documents.
+    # - Only HMs can update.
+    # - HM can only update jobs they own (hm_id == current_user["employee_id"]).
+
 async def update_job_and_resource_request(request_id: str, update_data: ResourceRequest, current_user):
-    """
-    Update both ResourceRequest and Job documents.
-    - Only HMs can update.
-    - HM can only update jobs they own (hm_id == current_user["employee_id"]).
-    """
+    
     if current_user["role"] != "HM":
         raise PermissionError("You do not have permission to update jobs.")
 
@@ -170,7 +171,7 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                     "rr_end_date": update_data.rr_end_date,
                     "wfm_id": update_data.wfm_id,
                     "hm_id": update_data.hm_id,
-                    "status": update_data.rr_status,
+                    "status": update_data.flag,
                     "job_grade": update_data.job_grade,
                     "account_name": update_data.account_name,
                     "project_id": update_data.project_id,
