@@ -7,6 +7,7 @@ load_dotenv()
 
 from routers import auth
 from utils.security import get_current_user
+from routers import manager_workflow
 # , file_upload, job, employee, application, manager_workflow, admin
 
 app = FastAPI(title="Talent Management System")
@@ -30,6 +31,7 @@ db = client.talent_management
 # def root():
 #     return {"message": "Talent Management System API"}
 app.include_router(auth.router, tags=["Auth"])
+app.include_router(manager_workflow.manager_router,tags=["Manager Workflow"])
 
 # Protected root endpoint
 @app.get("/")
