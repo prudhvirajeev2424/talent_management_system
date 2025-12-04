@@ -104,23 +104,23 @@ async def get_jobs(location: Optional[str], current_user):
  
  
 
-     # WFM role can access jobs based on WFM ID
+    # WFM role can access jobs based on WFM ID
     elif role == "WFM":
-        query = {"WFM ID": current_user["employee_id"]}
+        query = {"wfm_id": {"$ne":current_user["employee_id"]}}
         cursor = db.resource_request.find(query)
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return docs
-
+        return [await map_job(d) for d in docs]
+ 
      # HM role can access jobs based on HM ID
     elif role == "HM":
-        query = {"HM ID": current_user["employee_id"]}
+        query = {"hm_id": {"$ne":current_user["employee_id"]}}
         cursor = db.resource_request.find(query)
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return docs
+        return [await map_job(d) for d in docs]
 
 # Function to create a job and associated resource request, and write to a CSV file
 async def create_job_and_resource_request(job_data: ResourceRequest, current_user):
