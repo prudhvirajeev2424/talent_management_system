@@ -8,7 +8,7 @@ import os
 from datetime import datetime,date
 
 # Define the path for the CSV file
-CSV_PATH = os.path.join(os.path.dirname(__file__), "updated_jobs.csv")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "/rr_data/updated_jobs.csv")
 
 # Create MongoDB async client connection using the provided connection string
 client = AsyncIOMotorClient(

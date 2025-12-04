@@ -15,6 +15,8 @@ from database import collections
 from models import Employee, ResourceRequest, Job, User
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+
+
 from utils.file_upload_utils import log_upload_action,detect_encoding,convert_dates_for_mongo,sync_employees_with_db,sync_rr_with_db
  
 # -------------------------------------------------------------------
@@ -159,7 +161,7 @@ async def upload_rr_report(file: UploadFile = File(...)):
 # -------------------------------------------------------------------
 # Auto-processing (watch folder)
 # -------------------------------------------------------------------
-UPLOAD_FOLDER = "updated"
+UPLOAD_FOLDER = "..utils/rr_data"
 PROCESSED_FOLDER = "processed"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
