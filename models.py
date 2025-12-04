@@ -184,9 +184,9 @@ class ResourceRequest(BaseModel):
     last_activity_date: AwareDatetime = Field(..., alias="Last Activity Date")
     last_activity: Optional[str] = Field(None, alias="Last Activity")
     contract_category: Optional[str] = Field(None, alias="Contract Category")
-    mandatory_skills: str = Field(..., alias="Mandatory Skills")
-    optional_skills: Optional[str] = Field(None, alias="Optional Skills")
-    rr_skill_group: Optional[str] = Field(None, alias="RR Skill Group")
+    mandatory_skills: List[str] = Field(..., alias="Mandatory Skills")
+    optional_skills: Optional[List[str]] = Field(None, alias="Optional Skills")
+    rr_skill_group: Optional[List[str]] = Field(None, alias="RR Skill Group")
     flag: bool = True  
     matching_resources_count: Optional[int] = Field(None, alias="Matching Resources Count (Score 50% and above)")
     hiring_request_submit_date_mte: Optional[date] = Field(None, alias="Hiring request Submit Date (MTE)")
@@ -219,6 +219,22 @@ class ResourceRequest(BaseModel):
     company_name: str = Field(..., alias="Company Name")
  
     # Your existing validators remain 100% unchanged
+    @field_validator("allocated_fte","duration_before_cancellation","resources_in_propose",
+"resources_in_hm_check",
+"resources_in_internal_interview",
+"resources_in_customer_interview",
+"resources_in_accept",
+"resources_in_allocated",
+"resources_in_not_allocated",
+"resources_in_reject","rr_ageing",mode="before")
+    @classmethod
+    def csv_str_to_int(cls,v):
+        if str(v).strip() == "":
+            return
+         
+        v = float(str(v).strip())
+        return v
+    
     @field_validator("priority", mode="after")
     @classmethod
     def normalize_priority(cls, v):
@@ -232,7 +248,7 @@ class ResourceRequest(BaseModel):
             return v
         return str(v).strip().upper() in ("TRUE", "YES", "Y", "1")
  
-    @field_validator("mandatory_skills", "optional_skills", mode="after")
+    @field_validator("mandatory_skills", "optional_skills","rr_skill_group", mode="before")
     @classmethod
     def split_skills_from_string(cls, v):
         if not v or str(v).strip().upper() in ("", "NA", "N/A"):

@@ -1,0 +1,47 @@
+Resource Request ID,RR FTE,Allocated FTE,RR Status,RR Type,Priority,UST - Role,City,State,Country,Altenate Location,Campus,Job Grade,RR Start Date,RR End Date,Account Name,Project ID,Project Name,WFM,WFM ID,HM,HM ID,AM,AM ID,Billable,Actual Bill Rate,Actual Currency,Bill Rate,Billing Frequency,Currency,Target ECR,Accepted Resource Type,Replacement Type,Exclusive to UST,Contract to Hire,Client Job Title,UST Role Description,Job Description,Notes for WFM or TA,Client Interview Required,OBU Name,Project Start Date,Project End Date,Raised On,RR Finance Approved Date,WFM Approved Date,Cancelled Reasons,Edit Requested Date,Resubmitted Date,Duration in Edit(Days),# of Edits,Resubmitted Reason,Comments,Recruiter Name,Recruiter ID,Recruitment Type,Project Type,Last Updated On,Last Activity Date,Last Activity,Contract Category,Mandatory Skills,Optional Skills,RR Skill Group,flag,Matching Resources Count (Score 50% and above),Hiring request Submit Date (MTE),Marked To External,MTE Status,External - System,SO Initiator Name,SO Initiator ID,External Status,Allocation Project ID,Allocation Project Start Date,Allocation Project End Date,Practice Line,TA Cluster Lead,RR Ageing,Duration before Cancellation,Resources in Propose,Resources in HM Check,Resources in Internal Interview,Resources in Customer Interview,Resources in Accept,Resources in Allocated,Resources in Not Allocated,Resources in Reject,Edits Requested,Outgoing Employee Id,Outgoing Employee Name,Cancel Requested,Legal Entity,Company Name
+73157011_1,1.0,,Approved,New Project,P4,SOC Specialist I - Cyber Security,Trivandrum,Kerala,India,,IND-TRV-UST_SEZ Floor 5,B1,2024-10-04,2024-12-31,CyberPROOF,USTI-CYPF-DL-L3,CyberPROOF Security Operations,Anitha Narayanan,184422,Roman Bruk,U68669,Vinod Kartha,U10348,Yes,50.0,USD,50.0,H,USD,75.0,Any,,False,False,," Role Proficiency:
+Serve as the first point of contact for cyber security incidents escalations and investigation. Work with different teams to improve service provided by SOC to clients around the globe.  Outcomes:
+  React on cyber security incident escalation from L1 or customer on defined SLA and with proper investigation Analyze the L1 processes and create a new relevant process for service Analyzing the L1 requests for SIEM rule tuning and suggest relevant changes Perform trends analysis on collected data (alerts and incidents) and detection rules coverage Providing trainings for L1 on new technologies and tools Work with different teams (SIEM L1 TAM and etc) to provide required service to customers Perform review on handled alerts
+  Measures of Outcomes:
+  Accurate review on all handled alerts by L1 daily  Reply to escalation on time based on defined SLA  Number of False Positive detections reduced Percentage of threats that are blocked detected and reported
+  Outputs Expected:
+Incident Advance investigations  :  Investigate an incident escalated from previous layer  Include investigation in customer’s security tools 
+ Review and improve work and processes in L1 team:  Performing daily review on L1 activity (closed and escalated alerts/incidents) to validate that the investigation is in required quality and the decisions are correct
+ Improve SOC detection and monitoring service :  Analysis the triggered detection rules in SIEM solution to reduce a false positive rate and improve detection quality 
+  Skill Examples:
+SIEM IPS WAF etcFast self-learningGood analytic skillsGood soft skills (Verbal and writing)Presentation skill (Verbal)Programming languages such as C C# Python Perl Java PHP and Ruby on Rails
+  Knowledge Examples:
+Knowledge Examples  Experience as SOC analyst or parallel role in cyber security Good knowledge in cyber security area: Understanding attack methods and tools understanding the attack vectors be familiar with defence methodology be updated on current trends in cyber Have experience in incident guideline definitions
+","CyberProof is a cyber security services and platform company whose mission is to help our customers react faster and smarter – and stay ahead of security threats, by creating secure digital ecosystems. CyberProof automates processes to detect and prioritize threats early and respond rapidly and decisively.
+
+CyberProof is seeking a SOC L3 Engineer who will be part of our growing Global Operations & Delivery team, which monitors, investigates, and resolves security incidents, violations, and suspicious activities. Our global Operations group takes innovative approaches and uses the most cutting-edge technologies to transform the operations of our customers and secure the security landscape.
+
+Main Responsibilities
+Act as an escalation point for high and critical severity security incidents, and conduct thorough investigations to determine potential impact and understand extend of compromise;
+Analyse attack patterns, Tools, Techniques and Procedures (TTPs) to identify methods of attacks and attack life cycle;
+Provide recommendations on issue resolution activities such as security controls policy configuration changes and security hygiene improvement;
+Provide guidance on mitigating risks associated with security vulnerabilities;
+Hunt for Indicators of Compromise (IOCs) and signs of Advanced Persistent Threats (APTs) within the Client’s environment;
+Conduct threat hunting by means of in-depth log analysis to identify potential threats that may have evaded automated detection;
+Conduct analysis to gather evidence, validate root cause and analyse extend of compromise leveraging Client’s security toolset;
+Identify gaps and weaknesses in existing security processes and propose enhancements to improve Client’s established incident response methodologies;
+Collaborate with cross-functional teams, to ensure end to end management of security incident lifecycle;
+Document and update incident response processes, define outcomes for future references and drive continuous improvement; and 
+Participate in regular team meetings, Incident Response war room discussions and executive briefing sessions.
+Minimum 3+ years of experience as a SOC L3 Analyst working as part of a Global SOC team
+Resolve, escalate, report, and raise recommendations for resolving and remediating security incidents.
+Be an escalation point for investigations of clients and suggest optimization activities to improve their performance.
+Proactively monitor and review threats and suspicious events from customers participating in the service.
+Handle the advanced monitoring of system logs, SIEM tools, and network traffic for unusual or suspicious activity.
+Set up SIEM solutions and troubleshoot connectivity issues.
+Investigate and resolve security violations by providing post-mortem analysis to illuminate issues and possible solutions.
+Collate security incident and event data to produce monthly exception and management reports.
+Report unresolved network security exposure, misuse of resources, or noncompliance situations using defined escalation processes.
+Assist and train team members in the use of security tools, the preparation of security reports, and the resolution of security issues.
+Develop and maintain documentation for security systems and procedures.
+
+Requirements
+Maintain excellent customer satisfaction through professional, proactive and personal service.
+Experience with SIEM vendors such as QRadar, Sentinel, SPlunk
+Experience in incident response, and in writing procedures runbooks and playbooks
+Ability to work with customer’s IT and security teams",Global L3 for MSSP,Yes,CyberPROOF,2023-02-01,2025-12-31,2024-08-14,2025-01-27,,,2024-10-01,2025-01-27,118,1,Pushing to edit to reset ageing,,Praise Pullooruthikary Tharian,246096,Lateral Hiring,Non T&M,2024-10-04,2025-01-27 10:13:00+00:00,Approved,,"[""['Cyber Security'"", ""'Splunk Investigation'"", ""'MITRE ATTACK'"", ""'SOC L3 Engineer']""]",[],,True,0,2024-08-19,Yes,approved,RH,Arul John Mathew,U91131,,USTI-CYPF-DL-L3,2023-02-01,2025-12-31,,229372,2,,0,0,0,0,0,0,0,0,no,,,no,CYBERPROOF INDIA PRIVATE LIMITED,CyberProof

@@ -1,23 +1,20 @@
 # main.py
 import os
 import logging
-from datetime import datetime, timezone
-from typing import List
+from datetime import datetime
+
  
 import pandas as pd
-import chardet
 from io import BytesIO
  
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request,APIRouter
-from fastapi.responses import JSONResponse
- 
-from database import collections
-from models import Employee, ResourceRequest, Job, User
+from fastapi import  File, UploadFile, HTTPException,APIRouter,Depends
+
+from models import Employee, ResourceRequest, User
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from utils.security import get_current_user
 
-
-from utils.file_upload_utils import log_upload_action,detect_encoding,convert_dates_for_mongo,sync_employees_with_db,sync_rr_with_db
+from utils.file_upload_utils import log_upload_action,detect_encoding,convert_dates_for_mongo,sync_employees_with_db,sync_rr_with_db,read_csv_file
  
 # -------------------------------------------------------------------
 # Logging
@@ -46,31 +43,15 @@ class ReportProcessingException(HTTPException):
  
 file_upload_router = APIRouter(prefix="/api/upload")
  
-# # -------------------------------------------------------------------
-# # Global Exception Handlers
-# # -------------------------------------------------------------------
-# @file_upload_router.exception_handler(FileFormatException)
-# async def file_format_handler(_: Request, exc: FileFormatException):
-#     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
- 
-# @file_upload_router.exception_handler(ValidationException)
-# async def validation_handler(_: Request, exc: ValidationException):
-#     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
- 
-# @file_upload_router.exception_handler(DatabaseException)
-# async def db_handler(_: Request, exc: DatabaseException):
-#     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
- 
-# @file_upload_router.exception_handler(ReportProcessingException)
-# async def processing_handler(_: Request, exc: ReportProcessingException):
-#     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
- 
+
 
 # -------------------------------------------------------------------
 # API Endpoints
 # -------------------------------------------------------------------
 @file_upload_router.post("/upload/employees")
-async def upload_career_velocity(file: UploadFile = File(...)):
+async def upload_career_velocity(file: UploadFile = File(...),current_user=Depends(get_current_user)):
+    if current_user["role"] !="Admin":
+        return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise FileFormatException("Only .xlsx, .xls, or .csv files allowed")
@@ -114,17 +95,30 @@ async def upload_career_velocity(file: UploadFile = File(...)):
         "sync": result
     }
  
+
 @file_upload_router.post("/upload/rr-report")
-async def upload_rr_report(file: UploadFile = File(...)):
+async def upload_rr_report(file: UploadFile = File(...),current_user=Depends(get_current_user)):
+    if current_user["role"] != "HM":
+        return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise FileFormatException("Only Excel/CSV files allowed")
  
     try:
-        df = (pd.read_csv(BytesIO(content), skiprows=6, encoding=detect_encoding(content),
-                          dtype=str, engine="python", on_bad_lines="skip")
-              if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content), skiprows=6, dtype=str))
-        df = df.dropna(how="all")
+        # df = (pd.read_csv(BytesIO(content), skiprows=6, encoding=detect_encoding(content),
+        #                   dtype=str, engine="python", on_bad_lines="skip")
+        #       if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content), skiprows=6, dtype=str))
+        # df = df.dropna(how="all")
+        if file.filename.lower().endswith(".csv"):
+            df = read_csv_file(content)
+
+            if df is None or df.empty:
+                raise ReportProcessingException("CSV file contains no valid rows")
+
+        # ------------------------ EXCEL HANDLING (Pandas) ------------------------
+        else:
+            df = pd.read_excel(BytesIO(content), skiprows=6, dtype=str)
+            df = df.dropna(how="all")
     except Exception as e:
         raise ReportProcessingException(f"Failed to read RR report: {e}")
  
@@ -180,7 +174,7 @@ async def auto_rr_job():
         with open(src, "rb") as f:
             fake_file = UploadFile(filename=latest, file=BytesIO(f.read()))
         print(fake_file,"hello")
-        await upload_rr_report(fake_file)
+        await upload_rr_report(fake_file,{"role":"HM"})
         os.rename(src, dst)
         logger.info(f"Auto-processed RR: {latest} → processed/")
     except Exception as e:

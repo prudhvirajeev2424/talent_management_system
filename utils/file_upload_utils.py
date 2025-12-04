@@ -1,10 +1,11 @@
-import os
-import logging
 from datetime import datetime, timezone
 from typing import List
 import chardet
 from database import collections
 from models import Employee, ResourceRequest, Job, User
+from io import StringIO
+import pandas as pd
+import csv
 
 # -------------------------------------------------------------------
 # Audit Logging
@@ -153,4 +154,32 @@ async def sync_employees_with_db(employees: List[Employee], users: List[User]):
         "employees_updated": len(updates),
         "users_inserted": len(inserts_user),
     }
+    
+def read_csv_file(content: bytes):
+    """Read CSV reliably even if corrupted or irregular."""
+    # Detect encoding
+    enc = chardet.detect(content).get("encoding") or "utf-8"
+
+    text = content.decode(enc, errors="ignore")
+    stream = StringIO(text)
+
+
+    reader = csv.reader(stream)
+
+    # Remove completely empty rows
+    rows = [row for row in reader if any(cell.strip() for cell in row)]
+
+    if not rows:
+        return None  # No data
+
+    # Convert to DataFrame-like object
+    header = rows[0]
+    data_rows = rows[1:]
+
+    # Normalize row lengths
+    data = [row + [""] * (len(header) - len(row)) for row in data_rows]
+
+    df = pd.DataFrame(data, columns=header)
+    return df
+
  
