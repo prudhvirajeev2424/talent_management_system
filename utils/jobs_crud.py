@@ -62,11 +62,10 @@ async def get_jobs(location: Optional[str], current_user):
     elif role in ["TP", "Non TP"]:
        
         emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
-        emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         #Role - TP
         if emp and role == "TP":
             curr_band = emp["band"]
-            curr_skills = emp.get("detailed_skills)", [])
+            curr_skills = emp.get("detailed_skills", [])
 
              # Find the index of the current band
             indx = BANDS.index(curr_band)
@@ -84,7 +83,6 @@ async def get_jobs(location: Optional[str], current_user):
  
             # Execute the query to find jobs
             cursor = db.resource_request.find(query)
-            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
@@ -96,8 +94,6 @@ async def get_jobs(location: Optional[str], current_user):
             query = {}
             if location:
                 query["city"] = location
-            query["flag"]=True
-            cursor = db.resource_request.find(query)
             query["flag"]=True
             cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
@@ -126,7 +122,7 @@ async def get_jobs(location: Optional[str], current_user):
 
 # Access to the jobs for managers 
 #     - WFM: jobs where wfm_id == current_user.id
-#     - HM : jobs where hm_id== current_user.id 
+#     - HM : jobs where hm_id== current_user 
 async def jobs_under_manager(current_user):
     
     role = current_user["role"]
@@ -189,7 +185,6 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                 # Step 1: Find the resource request owned by this HM
                 resource_request = await db.resource_request.find_one(
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
-                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     session=session  # Pass the session for atomicity
                 )
                 if not resource_request:
@@ -245,8 +240,6 @@ async def get_skills_availability(current_user):
             optional_skills = rr.get("optional_skills", [])
  
             # Handle both list and string types
-            if isinstance(mandatory_skills, str):
-                mandatory_skills = [s.strip() for s in mandatory_skills.split(",") if s.strip()]
             if isinstance(optional_skills, str):
                 optional_skills = [s.strip() for s in optional_skills.split(",") if s.strip()]
  
