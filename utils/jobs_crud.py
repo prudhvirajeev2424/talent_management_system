@@ -346,7 +346,7 @@ async def patch_resource_request_single(
  
                 if result.matched_count == 0:
                     raise PermissionError("ResourceRequest not found or not owned by this HM.")
- 
+                logger.info(f"Performing the patch on Resource Request ID : {request_id} under HM ID:{current_user["employee_id"]}")
                 return True
  
             except Exception as e:
@@ -373,7 +373,8 @@ async def delete_resource_request(
  
                 if result.matched_count == 0:
                     raise PermissionError("ResourceRequest not found or not owned by this HM.")
- 
+                logger.info(f"Deactivating the Resource Request ID : {request_id} under HM ID:{current_user["employee_id"]}")
+
                 return True
  
             except Exception as e:
