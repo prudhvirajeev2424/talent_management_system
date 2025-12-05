@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional,Dict,Any
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from models import ResourceRequest
@@ -135,7 +135,7 @@ async def jobs_under_manager(current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return [await map_job(d) for d in docs]
+        return docs
  
      # HM role can access jobs based on HM ID
     elif role == "HM":
@@ -171,11 +171,9 @@ def normalize_dates(doc: dict) -> dict:
             doc[key] = datetime(value.year, value.month, value.day) # If value is a date object but not datetime
     return doc
 
-# Function to update both the ResourceRequest and Job documents in MongoDB
-
-    # Update both ResourceRequest and Job documents.
-    # - Only HMs can update.
-    # - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
+# Function to update both the ResourceRequest documents in MongoDB
+# - Only HMs can update.
+# - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
 async def update_job_and_resource_request(request_id: str, update_data: ResourceRequest, current_user):
    
     if current_user["role"] != "HM":
@@ -196,11 +194,9 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
  
                 # Step 2: Update ResourceRequest
                 update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
-                update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
                 update_resource_request_data = normalize_dates(update_resource_request_data)
  
                 update_result = await db.resource_request.update_one(
-                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"$set": update_resource_request_data},
                     session=session
@@ -217,10 +213,10 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
 # Function to get skills availability for HM
 # Fetches all resource requests for the HM, extracts all required skills,
 # and returns count of employees skilled in each skill
+
+# Normalize skill strings by removing brackets, quotes, and extra spaces.
+#     """
 def clean_skill(skill: str) -> str:
-    """
-    Normalize skill strings by removing brackets, quotes, and extra spaces.
-    """
     if not isinstance(skill, str):
         return str(skill).strip()
     skill = skill.strip()
