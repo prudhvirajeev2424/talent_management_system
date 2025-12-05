@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from typing import List
 import chardet
 from database import collections
@@ -6,7 +6,24 @@ from models import Employee, ResourceRequest , User
 from io import StringIO
 import pandas as pd
 import csv
+import os
+import logging
 
+# -------------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------------
+# logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("app.log", encoding='utf-8'),  # Log to a file
+                        # logging.StreamHandler()  # Optionally, still log to terminal
+                    ])
+logger = logging.getLogger("RRProcessor")
+
+UPLOAD_FOLDER = "upload_files/unprocessed"
+PROCESSED_FOLDER = "upload_files/processed"
 # -------------------------------------------------------------------
 # Audit Logging
 # -------------------------------------------------------------------
@@ -150,4 +167,16 @@ def read_csv_file(content: bytes):
     df = pd.DataFrame(data, columns=header)
     return df
 
+async def delete_old_files_in_processed():
+    now = datetime.now()
+    for filename in os.listdir(PROCESSED_FOLDER):
+        file_path = os.path.join(PROCESSED_FOLDER, filename)
+        if os.path.isfile(file_path):
+            file_creation_time = datetime.fromtimestamp(os.path.getctime(file_path))
+            if now - file_creation_time > timedelta(weeks=1):  # Older than 7 days
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Deleted old file: {filename}")
+                except Exception as e:
+                    logger.error(f"Failed to delete {filename}: {e}")
  
