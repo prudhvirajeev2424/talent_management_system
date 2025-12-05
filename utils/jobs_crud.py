@@ -342,3 +342,30 @@ async def patch_resource_request_single(
  
             except Exception as e:
                 raise Exception(f"Error occurred while patching ResourceRequest: {e}")
+            
+
+async def delete_resource_request(
+    request_id: str,
+    current_user: Dict
+) -> bool:
+ 
+    # Step 0: Permission check
+    if current_user.get("role") != "HM":
+        raise PermissionError("You do not have permission to delete resource requests.")
+ 
+    async with await db.client.start_session() as session:
+        async with session.start_transaction():
+            try:
+                result = await db.resource_request.update_one(
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
+                    {"$set": {"flag": False}},   # mark as inactive
+                    session=session
+                )
+ 
+                if result.matched_count == 0:
+                    raise PermissionError("ResourceRequest not found or not owned by this HM.")
+ 
+                return True
+ 
+            except Exception as e:
+                raise Exception(f"Error occurred while deleting ResourceRequest: {e}")
