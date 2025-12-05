@@ -42,8 +42,8 @@ async def map_job(doc):
 #     - Admin: all jobs
 #     - Employee (TP): jobs in band ±1, matching skills, optional location
 #     - Employee (non-TP): all jobs
-#     - WFM: jobs where wfm_id == current_user.id
-#     - HM: jobs where hm_id == current_user.id
+#     - WFM: jobs where wfm_id != jobs wfm_id
+#     - HM: jobs where hm_id != jobs hm_id
  
 async def get_jobs(location: Optional[str], current_user):
    
@@ -124,6 +124,9 @@ async def get_jobs(location: Optional[str], current_user):
             d["_id"] = str(d["_id"])
         return [await map_job(d) for d in docs]
 
+# Access to the jobs for managers 
+#     - WFM: jobs where wfm_id == current_user.id
+#     - HM : jobs where hm_id== current_user.id 
 async def jobs_under_manager(current_user):
     
     role = current_user["role"]
@@ -215,7 +218,6 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
 # and returns count of employees skilled in each skill
 
 # Normalize skill strings by removing brackets, quotes, and extra spaces.
-#     """
 def clean_skill(skill: str) -> str:
     if not isinstance(skill, str):
         return str(skill).strip()
