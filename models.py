@@ -71,7 +71,7 @@ class Employee(BaseModel):
  
         if re.match(r"^[A-D][0-9]$", value):    # A0–D9
             return value
-        if re.match(r"^[TEP][1-9]$", value):    # T/E/P grades
+        if re.match(r"^[TEP][0-9]$", value):    # T/E/P grades
             return value
  
         raise ValueError(f"Invalid band format: '{value}'")
@@ -90,7 +90,8 @@ class Employee(BaseModel):
     def split_detailed_skills(cls, v):
         if not v or str(v).strip().upper() in ("NA", "NOT AVAILABLE", "NULL", ""):
             return []
-        return [s.strip() for s in re.split(r'[,?]', str(v)) if s.strip()]
+        list_v = str(v).strip().split(",")
+        return [v.strip() for v in list_v]
  
     class Config:
         populate_by_name = False

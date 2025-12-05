@@ -16,7 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from utils.security import get_current_user
 
-from utils.file_upload_utils import log_upload_action,detect_encoding,sync_employees_with_db,sync_rr_with_db,read_csv_file,delete_old_files_in_processed,logger,UPLOAD_FOLDER,PROCESSED_FOLDER
+from utils.file_upload_utils import log_upload_action,sync_employees_with_db,sync_rr_with_db,read_csv_file,delete_old_files_in_processed,logger,UPLOAD_FOLDER,PROCESSED_FOLDER
 
 from exceptions.file_upload_exceptions import FileFormatException,ValidationException,ReportProcessingException
  
@@ -28,9 +28,10 @@ file_upload_router = APIRouter(prefix="/api/upload")
 # -------------------------------------------------------------------
 # API Endpoints
 # -------------------------------------------------------------------
-@file_upload_router.post("/upload/employees")
+@file_upload_router.post("/employees")
 async def upload_career_velocity(file: UploadFile = File(...),current_user=Depends(get_current_user)):
     if current_user["role"] !="Admin":
+        logger.error(f"Unauthorized attempt of logging for employee data upload")
         return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
@@ -38,7 +39,7 @@ async def upload_career_velocity(file: UploadFile = File(...),current_user=Depen
  
     # Load file
     try:
-        df = (pd.read_csv(BytesIO(content), encoding=detect_encoding(content), dtype=str, engine="python", on_bad_lines="skip")
+        df = (pd.read_csv(BytesIO(content), encoding="utf-8", dtype=str, engine="python", on_bad_lines="skip")
               if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content)))
         df = df.dropna(how="all")
     except Exception as e:
@@ -76,19 +77,16 @@ async def upload_career_velocity(file: UploadFile = File(...),current_user=Depen
     }
  
 
-@file_upload_router.post("/upload/rr-report")
+@file_upload_router.post("/rr-report")
 async def upload_rr_report(file: UploadFile = File(...),current_user=Depends(get_current_user)):
     if current_user["role"] != "HM":
+        logger.error(f"Unauthorized attempt of logging for rr_report upload")
         return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise FileFormatException("Only Excel/CSV files allowed")
  
     try:
-        # df = (pd.read_csv(BytesIO(content), skiprows=6, encoding=detect_encoding(content),
-        #                   dtype=str, engine="python", on_bad_lines="skip")
-        #       if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content), skiprows=6, dtype=str))
-        # df = df.dropna(how="all")
         if file.filename.lower().endswith(".csv"):
             df = read_csv_file(content)
 
