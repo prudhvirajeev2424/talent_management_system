@@ -6,6 +6,7 @@ from pymongo import ReturnDocument
 import csv
 import os
 from datetime import datetime,date
+from utils.file_upload_utils import logger
 
 # Define the path for the CSV file
 CSV_PATH = os.path.join(os.path.dirname(__file__), "../upload_files/unprocessed/updated_jobs.csv")
@@ -56,6 +57,7 @@ async def get_jobs(location: Optional[str], current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
+        logger.info(f"Fetching jobs for Role: {role}")
         return [await map_job(d) for d in docs]
 
      # Employee role-based access
@@ -86,7 +88,7 @@ async def get_jobs(location: Optional[str], current_user):
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
-            
+            logger.info(f"Fetching jobs for TP Employee: {current_user["employee_id"]}")
             return [await map_job(d) for d in docs]
         
         else:
@@ -99,7 +101,7 @@ async def get_jobs(location: Optional[str], current_user):
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
-           
+            logger.info(f"Fetching jobs for Non TP Employee : {current_user["employee_id"]}")
             return [await map_job(d) for d in docs]
 
     # WFM role can access jobs based on WFM ID
@@ -109,6 +111,7 @@ async def get_jobs(location: Optional[str], current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
+        logger.info(f"Fetching jobs for WFM Employee:{current_user["employee_id"]}")
         return [await map_job(d) for d in docs]
 
      # HM role can access jobs based on HM ID
@@ -118,6 +121,7 @@ async def get_jobs(location: Optional[str], current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
+        logger.info(f"Fetching jobs for HM Employee :{current_user["employee_id"]}")
         return [await map_job(d) for d in docs]
 
 # Access to the jobs for managers 
@@ -134,6 +138,7 @@ async def jobs_under_manager(current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
+        logger.info(f"Accessing jobs under wfm_id: {current_user["employee_id"]}")
         return docs
  
      # HM role can access jobs based on HM ID
@@ -143,6 +148,7 @@ async def jobs_under_manager(current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
+        logger.info(f"Accessing jobs under hm_id: {current_user["employee_id"]}")
         return docs
     
     
@@ -160,6 +166,7 @@ async def create_job_and_resource_request(job_data: ResourceRequest, current_use
         if not file_exists:
             writer.writeheader()
         writer.writerow(row)
+        logger.info(f"job created and appending it into csv file path: {CSV_PATH}")
 
 # Function to normalize dates (convert datetime.date to datetime.datetime for MongoDB compatibility)
 def normalize_dates(doc: dict) -> dict:
@@ -187,6 +194,7 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     session=session  # Pass the session for atomicity
                 )
+                logger.info(f"Fetching the Existing Job from Resource Request Document with ID: {request_id}")
                 if not resource_request:
                     raise PermissionError("ResourceRequest not found or you're not authorized to update this job.")
  
@@ -202,7 +210,7 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                 if update_result.matched_count == 0:
                     raise Exception("ResourceRequest not found for the job.")
 
-              
+                logger.info(f"Updating the Resource Request ID: {request_id} by HM ID: {current_user["employee_id"]}")
                 return True
  
             except Exception as e:
@@ -226,10 +234,11 @@ async def get_skills_availability(current_user):
 
     try:
         hm_id = current_user["employee_id"]
- 
+        
         # Step 1: Fetch all resource requests for this HM
         resource_requests = await db.resource_request.find({"hm_id": hm_id}).to_list(None)
- 
+        logger.info(f"Fetching the all Resource Requests under HM ID:{hm_id}")
+
         # Step 2: Extract all unique skills
         all_skills = set()
         rr_skills_mapping = []
