@@ -147,7 +147,7 @@ async def jobs_under_manager(current_user):
     
     
 # Function to create a job and associated resource request, and write to a CSV file
-async def create_job_and_resource_request(job_data: ResourceRequest, current_user):
+async def create_resource_request(job_data: ResourceRequest, current_user):
     row = job_data.dict(by_alias=True) # Convert the ResourceRequest data to a dictionary using aliases
 
 
@@ -173,7 +173,7 @@ def normalize_dates(doc: dict) -> dict:
 # Function to update both the ResourceRequest documents in MongoDB
 # - Only HMs can update.
 # - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
-async def update_job_and_resource_request(request_id: str, update_data: ResourceRequest, current_user):
+async def update_resource_request(request_id: str, update_data: ResourceRequest, current_user):
    
     if current_user["role"] != "HM":
         raise PermissionError("You do not have permission to update jobs.")
@@ -308,3 +308,37 @@ async def get_skills_availability(current_user):
  
     except Exception as e:
         raise Exception(f"Error retrieving skills availability: {str(e)}")
+    
+ 
+async def patch_resource_request_single(
+    request_id: str,
+    key: str,
+    value: Any,
+    current_user: Dict
+) -> bool:
+ 
+    # Step 0: Permission check
+    if current_user.get("role") != "HM":
+        raise PermissionError("You do not have permission to patch resource requests.")
+ 
+ 
+    # Step 2: Normalize value if needed (e.g., dates)
+    update_value = normalize_dates({key: value})[key]
+ 
+    # Step 3: Apply patch
+    async with await db.client.start_session() as session:
+        async with session.start_transaction():
+            try:
+                result = await db.resource_request.update_one(
+                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
+                    {"$set": {key: update_value}},
+                    session=session
+                )
+ 
+                if result.matched_count == 0:
+                    raise PermissionError("ResourceRequest not found or not owned by this HM.")
+ 
+                return True
+ 
+            except Exception as e:
+                raise Exception(f"Error occurred while patching ResourceRequest: {e}")
