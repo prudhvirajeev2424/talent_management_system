@@ -1,6 +1,6 @@
 # main.py
 import os
-import logging
+
 from datetime import datetime
 
  
@@ -9,37 +9,17 @@ from io import BytesIO
  
 from fastapi import  File, UploadFile, HTTPException,APIRouter,Depends
 
+from apscheduler.triggers.interval import IntervalTrigger
+
 from models import Employee, ResourceRequest, User
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from utils.security import get_current_user
 
-from utils.file_upload_utils import log_upload_action,detect_encoding,convert_dates_for_mongo,sync_employees_with_db,sync_rr_with_db,read_csv_file
+from utils.file_upload_utils import log_upload_action,sync_employees_with_db,sync_rr_with_db,read_csv_file,delete_old_files_in_processed,logger,UPLOAD_FOLDER,PROCESSED_FOLDER
+
+from exceptions.file_upload_exceptions import FileFormatException,ValidationException,ReportProcessingException
  
-# -------------------------------------------------------------------
-# Logging
-# -------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("RRProcessor")
- 
-# -------------------------------------------------------------------
-# Custom Exceptions
-# -------------------------------------------------------------------
-class FileFormatException(HTTPException):
-    def __init__(self, detail="Invalid file format"):
-        super().__init__(status_code=400, detail=detail)
- 
-class ValidationException(HTTPException):
-    def __init__(self, detail):
-        super().__init__(status_code=422, detail={"validation_error": detail})
- 
-class DatabaseException(HTTPException):
-    def __init__(self, detail="Database operation failed"):
-        super().__init__(status_code=500, detail=detail)
- 
-class ReportProcessingException(HTTPException):
-    def __init__(self, detail):
-        super().__init__(status_code=400, detail=detail)
  
 file_upload_router = APIRouter(prefix="/api/upload")
  
@@ -48,9 +28,10 @@ file_upload_router = APIRouter(prefix="/api/upload")
 # -------------------------------------------------------------------
 # API Endpoints
 # -------------------------------------------------------------------
-@file_upload_router.post("/upload/employees")
+@file_upload_router.post("/employees")
 async def upload_career_velocity(file: UploadFile = File(...),current_user=Depends(get_current_user)):
     if current_user["role"] !="Admin":
+        logger.error(f"Unauthorized attempt of logging for employee data upload")
         return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
@@ -58,7 +39,7 @@ async def upload_career_velocity(file: UploadFile = File(...),current_user=Depen
  
     # Load file
     try:
-        df = (pd.read_csv(BytesIO(content), encoding=detect_encoding(content), dtype=str, engine="python", on_bad_lines="skip")
+        df = (pd.read_csv(BytesIO(content), encoding="utf-8", dtype=str, engine="python", on_bad_lines="skip")
               if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content)))
         df = df.dropna(how="all")
     except Exception as e:
@@ -81,7 +62,7 @@ async def upload_career_velocity(file: UploadFile = File(...),current_user=Depen
  
     await log_upload_action("employees", file.filename,
                             "CSV" if file.filename.endswith(".csv") else "Excel",
-                            "API User", len(df), len(valid_emps), len(errors), errors[:5])
+                            current_user["employee_id"], len(df), len(valid_emps), len(errors), errors[:5])
  
     if not valid_emps:
         return {"message": "No valid employees found", "errors_sample": errors[:5]}
@@ -96,19 +77,16 @@ async def upload_career_velocity(file: UploadFile = File(...),current_user=Depen
     }
  
 
-@file_upload_router.post("/upload/rr-report")
+@file_upload_router.post("/rr-report")
 async def upload_rr_report(file: UploadFile = File(...),current_user=Depends(get_current_user)):
     if current_user["role"] != "HM":
+        logger.error(f"Unauthorized attempt of logging for rr_report upload")
         return HTTPException(status_code=409,detail="Not Authorized")
     content = await file.read()
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise FileFormatException("Only Excel/CSV files allowed")
  
     try:
-        # df = (pd.read_csv(BytesIO(content), skiprows=6, encoding=detect_encoding(content),
-        #                   dtype=str, engine="python", on_bad_lines="skip")
-        #       if file.filename.endswith(".csv") else pd.read_excel(BytesIO(content), skiprows=6, dtype=str))
-        # df = df.dropna(how="all")
         if file.filename.lower().endswith(".csv"):
             df = read_csv_file(content)
 
@@ -139,7 +117,7 @@ async def upload_rr_report(file: UploadFile = File(...),current_user=Depends(get
  
     await log_upload_action("rr_report", file.filename,
                             "CSV" if file.filename.endswith(".csv") else "Excel",
-                            "API User", len(df), len(valid_rrs), len(errors), errors[:5])
+                            current_user["employee_id"], len(df), len(valid_rrs), len(errors), errors[:5])
  
     if not valid_rrs:
         return {"message": "No valid RRs found", "errors_sample": errors[:5]}
@@ -155,12 +133,8 @@ async def upload_rr_report(file: UploadFile = File(...),current_user=Depends(get
 # -------------------------------------------------------------------
 # Auto-processing (watch folder)
 # -------------------------------------------------------------------
-UPLOAD_FOLDER = "updated"
-PROCESSED_FOLDER = "processed"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
  
-async def auto_rr():
+async def process_updated_rr_report():
     files = [f for f in os.listdir(UPLOAD_FOLDER)
              if f.lower().endswith((".xlsx", ".xls", ".csv"))]
     if not files:
@@ -173,19 +147,14 @@ async def auto_rr():
     try:
         with open(src, "rb") as f:
             fake_file = UploadFile(filename=latest, file=BytesIO(f.read()))
-        await upload_rr_report(fake_file,{"role":"HM"})
+        await upload_rr_report(fake_file,{"role":"HM","employee_id":"system"})
         os.rename(src, dst)
         logger.info(f"Auto-processed RR: {latest} → processed/")
     except Exception as e:
         logger.error(f"Auto RR failed for {latest}: {e}")
- 
+
 scheduler = AsyncIOScheduler()
-scheduler.add_job(auto_rr, "cron", minute="*", id="rr_watcher")
+scheduler.add_job(process_updated_rr_report, IntervalTrigger(hours=24), id="process_updated_files")
+scheduler.add_job(delete_old_files_in_processed,  IntervalTrigger(days=1) , id="delete_old_files")
 scheduler.start()
- 
- 
-scheduler = AsyncIOScheduler()
-scheduler.add_job(auto_rr, "cron", minute="*", id="rr_watcher")
-scheduler.start()
-print("Scheduler started")
  

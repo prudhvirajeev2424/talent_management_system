@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from typing import List
 import chardet
 from database import collections
@@ -6,7 +6,24 @@ from models import Employee, ResourceRequest , User
 from io import StringIO
 import pandas as pd
 import csv
+import os
+import logging
 
+# -------------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------------
+# logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("app.log", encoding='utf-8'),  # Log to a file
+                        # logging.StreamHandler()  # Optionally, still log to terminal
+                    ])
+logger = logging.getLogger("RRProcessor")
+
+UPLOAD_FOLDER = "upload_files/unprocessed"
+PROCESSED_FOLDER = "upload_files/processed"
 # -------------------------------------------------------------------
 # Audit Logging
 # -------------------------------------------------------------------
@@ -25,20 +42,6 @@ async def log_upload_action(audit_type: str, filename: str, file_type: str,
         "sample_errors": sample_errors,
     })
  
-# -------------------------------------------------------------------
-# Utilities
-# -------------------------------------------------------------------
-def detect_encoding(data: bytes) -> str:
-    result = chardet.detect(data)
-    encoding = result["encoding"] or "utf-8"
-    if result["confidence"] < 0.7:
-        for enc in ["utf-8", "cp1252", "latin1", "iso-8859-1"]:
-            try:
-                data.decode(enc)
-                return enc
-            except:
-                continue
-    return encoding
  
 def convert_dates_for_mongo(data: dict):
     """Convert date objects to UTC datetime for MongoDB storage."""
@@ -88,8 +91,8 @@ async def sync_rr_with_db(validated_rrs: List[ResourceRequest]):
  
 async def sync_employees_with_db(employees: List[Employee], users: List[User]):
  
-    existing = await collections["employees"].find({}, {"Employee ID": 1, "status": 1}).to_list(None)
-    emp_map = {e["Employee ID"]: e for e in existing}
+    existing = await collections["employees"].find({}, {"employee_id": 1, "status": 1}).to_list(None)
+    emp_map = {e["employee_id"]: e for e in existing}
  
     existing_users = await collections["users"].find({}, {"employee_id": 1}).to_list(None)
     user_set = {u["employee_id"] for u in existing_users}
@@ -107,8 +110,8 @@ async def sync_employees_with_db(employees: List[Employee], users: List[User]):
             inserts_user.append(user_data)
         else:
             if not emp_map[eid].get("status"):
-                updates.append({"filter": {"Employee ID": eid}, "update": {"$set": {"status": True}}})
-            updates.append({"filter": {"Employee ID": eid}, "update": {"$set": emp_data}})
+                updates.append({"filter": {"employee_id": eid}, "update": {"$set": {"status": True}}})
+            updates.append({"filter": {"employee_id": eid}, "update": {"$set": emp_data}})
             if str(eid) not in user_set:
                 inserts_user.append(user_data)
  
@@ -150,4 +153,16 @@ def read_csv_file(content: bytes):
     df = pd.DataFrame(data, columns=header)
     return df
 
+async def delete_old_files_in_processed():
+    now = datetime.now()
+    for filename in os.listdir(PROCESSED_FOLDER):
+        file_path = os.path.join(PROCESSED_FOLDER, filename)
+        if os.path.isfile(file_path):
+            file_creation_time = datetime.fromtimestamp(os.path.getctime(file_path))
+            if now - file_creation_time > timedelta(weeks=1):  # Older than 7 days
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Deleted old file: {filename}")
+                except Exception as e:
+                    logger.error(f"Failed to delete {filename}: {e}")
  

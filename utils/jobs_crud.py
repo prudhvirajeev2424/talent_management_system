@@ -8,7 +8,7 @@ import os
 from datetime import datetime,date
 
 # Define the path for the CSV file
-CSV_PATH = os.path.join(os.path.dirname(__file__), "../updated/updated_jobs.csv")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "../upload_files/unprocessed/updated_jobs.csv")
 
 # Create MongoDB async client connection using the provided connection string
 client = AsyncIOMotorClient(
@@ -50,7 +50,7 @@ async def get_jobs(location: Optional[str], current_user):
     role = current_user["role"] # Get the role of the current user (Admin, Employee, WFM, HM)
  
     # Admin has access to all jobs
-    if role == "Admin":
+    if role == "Admin" or role=="TP Manager":
         cursor = db.resource_request.find({}) 
         # Fetch the jobs as a list
         docs = await cursor.to_list(length=100)
