@@ -230,11 +230,14 @@ def clean_skill(skill: str) -> str:
     return skill.strip()
  
  
-async def get_skills_availability(current_user):
-
+async def get_skills_availability(
+    current_user,
+    resource_request_id: Optional[str] = None,
+    skill: Optional[str] = None
+):
     try:
         hm_id = current_user["employee_id"]
-        
+
         # Step 1: Fetch all resource requests for this HM
         resource_requests = await db.resource_request.find({"hm_id": hm_id}).to_list(None)
         logger.info(f"Fetching the all Resource Requests under HM ID:{hm_id}")
@@ -242,27 +245,26 @@ async def get_skills_availability(current_user):
         # Step 2: Extract all unique skills
         all_skills = set()
         rr_skills_mapping = []
- 
+
         for rr in resource_requests:
             rr_id = rr.get("resource_request_id", "")
+
+            # Apply resource_request_id filter if provided
+            if resource_request_id and rr_id != resource_request_id:
+                continue
+
             mandatory_skills = rr.get("mandatory_skills", [])
             optional_skills = rr.get("optional_skills", [])
- 
-            # Handle both list and string types
+
             if isinstance(optional_skills, str):
                 optional_skills = [s.strip() for s in optional_skills.split(",") if s.strip()]
- 
-            # Normalize skills
+
             mandatory_skills = [clean_skill(s) for s in mandatory_skills]
             optional_skills = [clean_skill(s) for s in optional_skills]
- 
-            # Combine and deduplicate
+
             combined_skills = list(set(mandatory_skills + optional_skills))
- 
-            # Add to global set
             all_skills.update(combined_skills)
- 
-            # Store mapping
+
             rr_skills_mapping.append({
                 "resource_request_id": rr_id,
                 "project_name": rr.get("project_name", ""),
@@ -272,19 +274,22 @@ async def get_skills_availability(current_user):
                 "combined_skills": combined_skills,
                 "total_skills_required": len(combined_skills)
             })
- 
+
         # Step 3: For each skill, find employees
         skills_summary = []
-        for skill in sorted(all_skills):
-            if not skill:
+        for skill_name in sorted(all_skills):
+            if not skill_name:
                 continue
- 
+
+            if skill and skill_name.lower() != skill.lower():
+                continue
+
             employees_with_skill = await db.employees.find({
-                "detailed_skills": {"$in": [skill]}
+                "detailed_skills": {"$in": [skill_name]}
             }).to_list(None)
- 
+
             skills_summary.append({
-                "skill": skill,
+                "skill": skill_name,
                 "employee_count": len(employees_with_skill),
                 "employees": [
                     {
@@ -297,28 +302,48 @@ async def get_skills_availability(current_user):
                     for emp in employees_with_skill
                 ]
             })
- 
-        # Step 4: Return summary
-        return {
-            "hm_id": hm_id,
-            "resource_requests_count": len(resource_requests),
-            "total_unique_skills": len(all_skills),
-            "resource_requests": rr_skills_mapping,
-            "skills_summary": sorted(skills_summary, key=lambda x: x["employee_count"], reverse=True),
-            "summary_stats": {
-                "total_resource_requests": len(resource_requests),
-                "total_unique_skills_required": len(all_skills),
-                "average_employees_per_skill": round(
-                    sum(s["employee_count"] for s in skills_summary) / len(skills_summary), 2
-                ) if skills_summary else 0,
-                "skills_with_no_employees": len([s for s in skills_summary if s["employee_count"] == 0])
+
+        # Step 4: Conditional return format
+        if resource_request_id and not skill:
+            # Only resource request filter
+            return {
+                "hm_id": hm_id,
+                "resource_requests": rr_skills_mapping,
+                "skills_summary": skills_summary
             }
-        }
- 
+        elif skill and not resource_request_id:
+            # Only skill filter
+            return {
+                "hm_id": hm_id,
+                "skills_summary": skills_summary
+            }
+        elif skill and resource_request_id:
+            # Both filters applied
+            return {
+                "hm_id": hm_id,
+                "resource_requests": rr_skills_mapping,
+                "skills_summary": skills_summary
+            }
+        else:
+            # No filters applied → full summary
+            return {
+                "hm_id": hm_id,
+                "resource_requests_count": len(resource_requests),
+                "total_unique_skills": len(all_skills),
+                "resource_requests": rr_skills_mapping,
+                "skills_summary": sorted(skills_summary, key=lambda x: x["employee_count"], reverse=True),
+                "summary_stats": {
+                    "total_resource_requests": len(resource_requests),
+                    "total_unique_skills_required": len(all_skills),
+                    "average_employees_per_skill": round(
+                        sum(s["employee_count"] for s in skills_summary) / len(skills_summary), 2
+                    ) if skills_summary else 0,
+                    "skills_with_no_employees": len([s for s in skills_summary if s["employee_count"] == 0])
+                }
+            }
+
     except Exception as e:
         raise Exception(f"Error retrieving skills availability: {str(e)}")
-    
- 
 async def patch_resource_request_single(
     request_id: str,
     key: str,
