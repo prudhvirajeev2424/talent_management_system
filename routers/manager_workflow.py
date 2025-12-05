@@ -24,20 +24,20 @@ async def get_manager_applications(current_user: dict):
     emp_id = current_user["employee_id"]
 
     if role == "TP Manager":  # TP Managers see TP employee submissions
-        tp_emp_ids = [str(e["Employee ID"]) async for e in collections["employees"].find({"Type": "TP"}, {"Employee ID": 1})]
+        tp_emp_ids = [str(e["employee_id"]) async for e in collections["employees"].find({"type": "TP"}, {"employee_id": 1})]
         query = {"employee_id": {"$in": tp_emp_ids}, "status": "Submitted"}
 
-    elif role == "WFM":  # WFM sees their jobs + Non-TP employees
-        job_rr_ids = [j["rr_id"] async for j in collections["jobs"].find({"wfm_id": emp_id}, {"rr_id": 1})]
-        non_tp_emp_ids = [str(e["Employee ID"]) async for e in collections["employees"].find({"Type": "Non TP"}, {"Employee ID": 1})]
+    elif role == "WFM":  # WFM sees their resource_request + Non-TP employees
+        job_rr_ids = [j["resource_request_id"] async for j in collections["resource_request"].find({"wfm_id": emp_id}, {"resource_request_id": 1})]
+        non_tp_emp_ids = [str(e["employee_id"]) async for e in collections["employees"].find({"type": "Non TP"}, {"employee_id": 1})]
         query = {
             "job_rr_id": {"$in": job_rr_ids or ["__none__"]},  # prevent empty $in
             "employee_id": {"$in": non_tp_emp_ids},
             "status": {"$nin": ["Draft", "Allocated", "Selected", "Rejected", "Withdrawn"]}
         }
 
-    elif role == "HM":  # Hiring Managers see Selected candidates for their jobs
-        job_rr_ids = [j["rr_id"] async for j in collections["jobs"].find({"hm_id": emp_id}, {"rr_id": 1})]
+    elif role == "HM":  # Hiring Managers see Selected candidates for their resource_request
+        job_rr_ids = [j["resource_request_id"] async for j in collections["resource_request"].find({"hm_id": emp_id}, {"resource_request_id": 1})]
         query = {"job_rr_id": {"$in": job_rr_ids or ["__none__"]}, "status": "Selected"}
 
     else:
@@ -60,17 +60,17 @@ async def shortlist(app_id: str, current_user: dict = Depends(get_current_user))
     if not app:
         raise HTTPException(404, "Application not found")
 
-    emp = await collections["employees"].find_one({"Employee ID": int(app["employee_id"])})
+    emp = await collections["employees"].find_one({"employee_id": int(app["employee_id"])})
 
     # TP Manager shortlists TP candidates
-    if current_user["role"] == "TP Manager" and emp["Type"] == "TP" and app["status"] == "Submitted":
+    if current_user["role"] == "TP Manager" and emp["type"] == "TP" and app["status"] == "Submitted":
         result = await collections["applications"].update_one({"_id": app_id}, {"$set": {"status": "Shortlisted", "updated_at": datetime.utcnow()}})
         if result.modified_count:
             await log_audit("shortlist_tp", app_id, current_user["employee_id"], {"from": "Submitted"})
         return {"message": "Shortlisted by TP Manager"}
 
     # WFM shortlists Non-TP candidates
-    if current_user["role"] == "WFM" and emp["Type"] == "Non TP" and app["status"] == "Submitted":
+    if current_user["role"] == "WFM" and emp["type"] == "Non TP" and app["status"] == "Submitted":
         result = await collections["applications"].update_one({"_id": app_id}, {"$set": {"status": "Shortlisted", "updated_at": datetime.utcnow()}})
         if result.modified_count:
             await log_audit("shortlist_non_tp", app_id, current_user["employee_id"], {"from": "Submitted"})
@@ -133,7 +133,7 @@ async def allocate(app_id: str, current_user: dict = Depends(get_current_user)):
     if not app:
         raise HTTPException(400, "Application not in Selected state")
 
-    job = await collections["jobs"].find_one({"rr_id": app["job_rr_id"], "hm_id": current_user["employee_id"]})
+    job = await collections["resource_request"].find_one({"resource_request_id": app["job_rr_id"], "hm_id": current_user["employee_id"]})
     if not job:
         raise HTTPException(403, "You don't own this job")
 
@@ -243,7 +243,7 @@ async def get_skill_matches(
 ):
 
     # Fetch job
-    job = await collections["jobs"].find_one({"rr_id": job_rr_id})
+    job = await collections["resource_request"].find_one({"resource_request_id": job_rr_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job RR not found")
 
@@ -266,7 +266,7 @@ async def get_skill_matches(
         employee_id = app["employee_id"]
 
         # Fetch employee profile
-        employee = await collections["employees"].find_one({"Employee ID": int(employee_id)})
+        employee = await collections["employees"].find_one({"employee_id": int(employee_id)})
         if not employee:
             continue
 

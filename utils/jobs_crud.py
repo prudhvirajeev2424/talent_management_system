@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional,Dict,Any
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from models import ResourceRequest
@@ -42,8 +42,8 @@ async def map_job(doc):
 #     - Admin: all jobs
 #     - Employee (TP): jobs in band ±1, matching skills, optional location
 #     - Employee (non-TP): all jobs
-#     - WFM: jobs where wfm_id == current_user.id
-#     - HM: jobs where hm_id == current_user.id
+#     - WFM: jobs where wfm_id != jobs wfm_id
+#     - HM: jobs where hm_id != jobs hm_id
  
 async def get_jobs(location: Optional[str], current_user):
    
@@ -62,11 +62,10 @@ async def get_jobs(location: Optional[str], current_user):
     elif role in ["TP", "Non TP"]:
        
         emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
-        emp = await db.employees.find_one({"employee_id": int(current_user["employee_id"])})
         #Role - TP
         if emp and role == "TP":
             curr_band = emp["band"]
-            curr_skills = emp.get("detailed_skills)", [])
+            curr_skills = emp.get("detailed_skills", [])
 
              # Find the index of the current band
             indx = BANDS.index(curr_band)
@@ -84,7 +83,6 @@ async def get_jobs(location: Optional[str], current_user):
  
             # Execute the query to find jobs
             cursor = db.resource_request.find(query)
-            cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
             for d in docs:
                 d["_id"] = str(d["_id"])
@@ -96,8 +94,6 @@ async def get_jobs(location: Optional[str], current_user):
             query = {}
             if location:
                 query["city"] = location
-            query["flag"]=True
-            cursor = db.resource_request.find(query)
             query["flag"]=True
             cursor = db.resource_request.find(query)
             docs = await cursor.to_list(length=100)
@@ -124,6 +120,9 @@ async def get_jobs(location: Optional[str], current_user):
             d["_id"] = str(d["_id"])
         return [await map_job(d) for d in docs]
 
+# Access to the jobs for managers 
+#     - WFM: jobs where wfm_id == current_user.id
+#     - HM : jobs where hm_id== current_user 
 async def jobs_under_manager(current_user):
     
     role = current_user["role"]
@@ -135,7 +134,7 @@ async def jobs_under_manager(current_user):
         docs = await cursor.to_list(length=100)
         for d in docs:
             d["_id"] = str(d["_id"])
-        return [await map_job(d) for d in docs]
+        return docs
  
      # HM role can access jobs based on HM ID
     elif role == "HM":
@@ -171,11 +170,9 @@ def normalize_dates(doc: dict) -> dict:
             doc[key] = datetime(value.year, value.month, value.day) # If value is a date object but not datetime
     return doc
 
-# Function to update both the ResourceRequest and Job documents in MongoDB
-
-    # Update both ResourceRequest and Job documents.
-    # - Only HMs can update.
-    # - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
+# Function to update both the ResourceRequest documents in MongoDB
+# - Only HMs can update.
+# - HM can only update jobs they own (hm_id == current_user["employee_id"]). 
 async def update_job_and_resource_request(request_id: str, update_data: ResourceRequest, current_user):
    
     if current_user["role"] != "HM":
@@ -188,7 +185,6 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
                 # Step 1: Find the resource request owned by this HM
                 resource_request = await db.resource_request.find_one(
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
-                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     session=session  # Pass the session for atomicity
                 )
                 if not resource_request:
@@ -196,11 +192,9 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
  
                 # Step 2: Update ResourceRequest
                 update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
-                update_resource_request_data = update_data.dict(exclude_unset=True, by_alias=False)
                 update_resource_request_data = normalize_dates(update_resource_request_data)
  
                 update_result = await db.resource_request.update_one(
-                    {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"resource_request_id": request_id, "hm_id": current_user["employee_id"]},
                     {"$set": update_resource_request_data},
                     session=session
@@ -217,10 +211,9 @@ async def update_job_and_resource_request(request_id: str, update_data: Resource
 # Function to get skills availability for HM
 # Fetches all resource requests for the HM, extracts all required skills,
 # and returns count of employees skilled in each skill
+
+# Normalize skill strings by removing brackets, quotes, and extra spaces.
 def clean_skill(skill: str) -> str:
-    """
-    Normalize skill strings by removing brackets, quotes, and extra spaces.
-    """
     if not isinstance(skill, str):
         return str(skill).strip()
     skill = skill.strip()
@@ -247,8 +240,6 @@ async def get_skills_availability(current_user):
             optional_skills = rr.get("optional_skills", [])
  
             # Handle both list and string types
-            if isinstance(mandatory_skills, str):
-                mandatory_skills = [s.strip() for s in mandatory_skills.split(",") if s.strip()]
             if isinstance(optional_skills, str):
                 optional_skills = [s.strip() for s in optional_skills.split(",") if s.strip()]
  
